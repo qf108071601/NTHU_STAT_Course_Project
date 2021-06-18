@@ -1,4 +1,0 @@
-碩二下統計計算期末報告：
-# 文字探勘
-# 財金書籍(投資最重要的事)(The Most Important Things)
-# R PDF文字擷取
