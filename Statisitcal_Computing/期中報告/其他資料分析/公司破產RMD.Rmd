@@ -1,0 +1,530 @@
+---
+title: "統算期中"
+author: "統算"
+date: "2021/4/28"
+output: html_document
+---
+# 讀資料
+```{r}
+library(tidyverse)
+
+data = read.csv("C:/Users/Lai/Desktop/統算期中/bankruptcy.csv")
+data$Bankruptcy = as.integer(data$Bankruptcy)
+data$Net.Income.Flag = NULL
+
+
+for (i in 2:ncol(data)) {
+  data[,i] = as.numeric(data[,i])
+  data[,i] = scale(data[,i],center = T,scale = T)
+}
+```
+
+
+```{r}
+dist.raw <- dist(data[,-1])
+
+H = hclust(dist.raw,method = "ward.D")
+# Convert hclust into a dendrogram and plot
+plot(H, hang = -1, cex = 0.6,horiz = TRUE)
+
+Group <- cutree(H,k=3)
+data$Group = Group
+table(Group)
+
+```
+
+```{r}
+x = data %>% group_by(Group,Bankruptcy) %>%
+  summarise(N = table(Bankruptcy))
+
+x = as.matrix(x)
+x = rbind(x,c(3,1,0))
+x = as.data.frame(x)
+
+x %>%
+  group_by(Group,Bankruptcy) %>%
+  summarise(N) %>%
+  ggplot(mapping = aes(
+    x = as.factor(Group), fill = as.factor(Bankruptcy), y = N))+
+  geom_col(position =position_dodge(0.9),width = 0.8,colour = "black")+
+  geom_text(aes(label=N),
+            position = position_dodge(width = 0.9),
+            vjust=-0.5,
+            color="black", size=4)+
+  theme(axis.text.x = element_text(vjust=0.5,size=11),
+        legend.text=element_text(size=9),legend.title=element_text(size=11))+
+  scale_fill_brewer(palette = "Set2")+
+    labs(x="Group",
+         y=NULL,
+         fill="Bankruptcy")
+```
+
+
+```{r}
+names(data) = paste0("V",1:96)
+
+all = data %>% group_by(V96) %>%
+  summarise_at(1:20,mean)
+
+library(pheatmap)
+bk <- c(seq(-2,0,by=0.001),
+        seq(0.00001,2,by=0.001))
+pheatmap(all[,-1],
+         color = c(
+           colorRampPalette(
+             colors = c("darkgreen","white"))((length(bk)/2)),
+           colorRampPalette(
+             colors = c("white","darkorange"))(length(bk)/2)),
+         breaks = bk,
+         cluster_row = FALSE,
+         cluster_cols = FALSE,
+         fontsize = 11,
+         na_col="white",
+         display_numbers = T)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# 非監督分群
+## 取Bankrupty為1
+
+```{r}
+library(cluster)
+data_Positive <- data[data$Bankruptcy==1,];dim(data_Positive)
+
+k.max <- 10
+asw <- rep(NA,10)
+for(i in 2:k.max){
+  asw[i] = clara(data_Positive,i)$silinfo$avg.width
+}
+
+k.best <- which.min(asw)
+plot(2:10, asw[2:10],
+     type="l", pch = 19, frame = FALSE,
+     xlab="Number of clusters K",
+     ylab="Total within-clusters sum of squares")
+
+clustering <- clara(data_Positive,k.best)
+data_Positive_cluster <- data.frame(data_Positive,clustering$cluster)
+
+cluster_p = lapply(1:max(data_Positive_cluster$clustering.cluster), function(a){
+  data_Positive_cluster[data_Positive_cluster$clustering.cluster==a,][,1:ncol(data)]
+})
+
+cluster_p_1 = lapply(1:max(data_Positive_cluster$clustering.cluster), function(a){
+  set.seed(12345)
+  x = cluster_p[[a]]
+  x[sample(nrow(x),0.7*nrow(x),replace=F),]
+})
+
+only_1 = cluster_p_1[[1]]
+for (i in 2:length(cluster_p_1)) {
+  only_1 = rbind(only_1,cluster_p_1[[i]])
+}
+```
+
+
+## Bankrupty為0
+```{r}
+set.seed(12345)
+data_Negative <- data[data$Bankruptcy==0,];dim(data_Negative)
+k.max <- 10
+asw <- rep(NA,10)
+for(i in 2:k.max){
+  asw[i] = clara(data_Negative,i)$silinfo$avg.width
+}
+k.best <- which.min(asw)
+plot(2:10, asw[2:10],
+     type="l", pch = 19, frame = FALSE,
+     xlab="Number of clusters K",
+     ylab="Total within-clusters sum of squares")
+
+clustering <- clara(data_Negative,k.best)
+data_Negative_cluster <- data.frame(data_Negative,clustering$cluster)
+
+cluster_p = lapply(1:max(data_Negative_cluster$clustering.cluster), function(a){
+  data_Negative_cluster[data_Negative_cluster$clustering.cluster==a,][,1:ncol(data)]
+})
+
+cluster_p_1 = lapply(1:max(data_Negative_cluster$clustering.cluster), function(a){
+  set.seed(12345)
+  x = cluster_p[[a]]
+  x[sample(nrow(x),0.7*nrow(x),replace=F),]
+})
+
+only_0 = cluster_p_1[[1]]
+for (i in 2:length(cluster_p_1)) {
+  only_0 = rbind(only_0,cluster_p_1[[i]])
+}
+```
+
+
+
+# 看0,1比例拆Train/Test (70,30)
+```{r}
+train = rbind(only_0,only_1)
+train$Bankruptcy %>% table()
+
+test = data[-as.numeric(rownames(train)),]
+```
+
+
+# Train資料平衡
+```{r}
+table(train$Bankruptcy)
+data_Positive <- train[train$Bankruptcy==1,];dim(data_Positive)
+k.max <- 10
+asw <- rep(NA,10)
+for(i in 2:k.max){
+  asw[i] = clara(data_Positive,i)$silinfo$avg.width
+}
+
+k.best <- which.min(asw)
+plot(2:10, asw[2:10],
+     type="l", pch = 19, frame = FALSE,
+     xlab="Number of clusters K",
+     ylab="Total within-clusters sum of squares")
+
+clustering <- clara(data_Positive,k.best)
+data_Positive_cluster <- data.frame(data_Positive,clustering$cluster)
+
+cluster_p = lapply(1:max(data_Positive_cluster$clustering.cluster), function(a){
+  data_Positive_cluster[data_Positive_cluster$clustering.cluster==a,][,1:ncol(data)]
+})
+
+cluster_p_1 = lapply(1:max(data_Positive_cluster$clustering.cluster), function(a){
+  set.seed(12345)
+  x = cluster_p[[a]]
+  x[sample(nrow(x),20*nrow(x),replace=T),]
+})
+
+only_1 = cluster_p_1[[1]]
+for (i in 2:length(cluster_p_1)) {
+  only_1 = rbind(only_1,cluster_p_1[[i]])
+}
+
+set.seed(12345)
+data_Negative <- train[train$Bankruptcy==0,];dim(data_Negative)
+k.max <- 10
+asw <- rep(NA,10)
+for(i in 2:k.max){
+  asw[i] = clara(data_Negative,i)$silinfo$avg.width
+}
+k.best <- which.min(asw)
+plot(2:10, asw[2:10],
+     type="l", pch = 19, frame = FALSE,
+     xlab="Number of clusters K",
+     ylab="Total within-clusters sum of squares")
+
+clustering <- clara(data_Negative,k.best)
+data_Negative_cluster <- data.frame(data_Negative,clustering$cluster)
+
+cluster_p = lapply(1:max(data_Negative_cluster$clustering.cluster), function(a){
+  data_Negative_cluster[data_Negative_cluster$clustering.cluster==a,][,1:ncol(data)]
+})
+
+cluster_p_1 = lapply(1:max(data_Negative_cluster$clustering.cluster), function(a){
+  set.seed(12345)
+  x = cluster_p[[a]]
+  x[sample(nrow(x),0.7*nrow(x),replace=F),]
+})
+
+only_0 = cluster_p_1[[1]]
+for (i in 2:length(cluster_p_1)) {
+  only_0 = rbind(only_0,cluster_p_1[[i]])
+}
+
+train_balance = rbind(only_0,only_1)
+train_balance$Bankruptcy %>% table()
+```
+
+
+# XGBoost
+```{r}
+library(xgboost)
+xgb.params = list(
+  objective = "binary:logistic", 
+  subsample = 0.4,
+  booster="gbtree",
+  colsample_bytree = 0.4,
+  set.seed = 6666,
+  max_depth = 4,
+  eta = 0.03, 
+  eval_metric = "error",
+  gamma = 0
+)
+
+cv.model <- xgb.cv(
+  data = data.matrix(subset(train_balance, select = -Bankruptcy)),
+  label = train_balance$Bankruptcy,
+  params = xgb.params,
+  nrounds = 400,
+  nfold = 5,
+  print_every_n = 10,
+  early_stopping_rounds = 30
+)
+```
+
+# 看CV表現
+```{r}
+tmp = cv.model$evaluation_log
+
+plot(x=1:nrow(tmp), y= tmp$train_error_mean,
+     col='red', xlab="nround", ylab="AUC",type="l", main="Avg.Performance in CV")
+lines(x=1:nrow(tmp), y= tmp$test_error_mean, col='blue')
+
+legend("topright", pch=1, col = c("red", "blue"),
+       legend = c("Train", "Validation") )
+```
+
+
+# 建模
+```{r,include = FALSE}
+best.nrounds = cv.model$best_iteration
+
+xgb.model <- xgboost::xgboost(
+  data.matrix(subset(train_balance,
+                     select = -Bankruptcy)),
+  label = train_balance$Bankruptcy,
+  params = xgb.params,
+  nrounds = best.nrounds)
+```
+
+# 在Test表現
+```{r}
+dtest = data.matrix(subset(test, select = -Bankruptcy))
+xgb.pred = predict(xgb.model,dtest,reshape=T,type="response")
+fit = ifelse(xgb.pred>0.5,1,0)
+
+library(caret)
+xtab <- table(fit,test$Bankruptcy)
+print(confusionMatrix(xtab[2:1,2:1]))
+
+```
+
+# ROC/Recall
+```{r}
+library(precrec)
+precrec_obj <- evalmod(scores = xgb.pred, labels = test$Bankruptcy)
+autoplot(precrec_obj)
+```
+
+# Importance Plot
+```{r}
+library(vip)
+vip(xgb.model, num_features = 20)
+```
+
+
+# 取前25有解釋力變數
+```{r}
+select = vip(xgb.model, num_features = 20)
+col = select$data[1]
+
+select_col = c(col$Variable,"Bankruptcy")
+# CART
+train_balance_select = train_balance[,select_col]
+test_select = test[,select_col]
+data_select = data[,select_col]
+```
+
+
+```{r}
+colnames(data_select) = paste0("V",1:ncol(data_select))
+Cor = cor(data_select)
+
+library(pheatmap)
+bk <- c(seq(-1,-0.0001,by=0.001),
+        seq(0,1,by=0.001))
+pheatmap(Cor,
+         color = c(
+           colorRampPalette(
+             colors = c("navyblue","white"))((length(bk)/2)),
+           colorRampPalette(
+             colors = c("white","firebrick"))(length(bk)/2)),
+         breaks = bk,
+         cluster_row = FALSE,
+         cluster_cols = FALSE,
+         fontsize = 11,
+         na_col="white",
+         display_numbers = F)
+
+
+```
+
+```{r}
+library(psych)
+correlations <- cor(data_select[,-21])
+fa.parallel(correlations,
+            n.obs = 500)
+
+EFA_model <- fa(data_select,nfactors = 4,rotate = "varimax",fm = "pa")
+EFA_model
+factor.plot(EFA_model,
+            labels = rownames(EFA_model$loadings),pos = 2)
+
+print(EFA_model)
+fa.diagram(EFA_model, digits = 2)
+
+```
+
+```{r}
+library(qgraph)
+loading = lapply(1:4, function(a){
+  which(abs(EFA_model[["Structure"]][,a])>0.4) %>% as.numeric()
+})
+
+corMat <- cor_auto(exp(data_select[,-26]))
+names = c(1:ncol(data_select)+1) %>% as.character()
+Graph_lasso <- qgraph(corMat, graph = "glasso",
+                      layout = "spring", tuning = 0.25,
+                      sampleSize = nrow(data_select),
+                      legend.cex = 0.35, vsize = 6,esize = 12,
+                      posCol = "#003399", negCol = "#FF9933",
+                      vTrans = 200,groups=loading,
+                      color=c("red", "orange", "yellow", "blue", "green"),
+                      nodeNames = c(select_col[-26]), labels = names)
+```
+
+
+
+
+```{r}
+library(rpart)
+library(rpart.plot)
+controls=rpart.control(maxdepth= 4)
+
+cart.model<- rpart(as.factor(Bankruptcy)~. ,
+                   control = controls,
+                   data=train_balance_select,
+                   parms = list(split = "gini"))
+
+p_y = predict(cart.model,test_select[,-31])
+cart_pred = ifelse(p_y[,2]>0.5,1,0)
+
+xtab = table(cart_pred,test$Bankruptcy)
+
+print(confusionMatrix(xtab[2:1,2:1]))
+
+```
+
+```{r}
+rpart.plot(cart.model,
+           tweak = 1,cex =0.8,
+           extra = 104, # show fitted class, probs, percentages
+           box.palette = "GnBu", # color scheme
+           branch.lty = 2, # dotted branch lines
+           nn = TRUE)
+```
+
+
+```{r}
+try = data[,c("Net.Income.to.Total.Assets",
+              "Borrowing.dependency",
+              "Bankruptcy")]
+```
+
+
+```{r}
+library(mclust, quietly=TRUE)
+library(MASS)
+library(Rfast)
+
+kmeans <- kmeans(try[,c(1,2)], centers=2) 
+table(try$Bankruptcy,kmeans$cluster)
+try$Kmeans = ifelse(kmeans$cluster==1,0,1)
+```
+
+
+```{r}
+data.split = split(try[,1:2],try$Kmeans)
+data.mvnorm <- lapply(data.split, function(x) mvnorm.mle(as.matrix(x)))
+
+
+#gaussian 1
+
+mean1 <- data.mvnorm[[1]]$mu
+sigma1 <- data.mvnorm[[1]]$sigma
+
+#gaussian 2
+
+mean2 <- data.mvnorm[[2]]$mu
+sigma2 <- data.mvnorm[[2]]$sigma
+
+```
+
+```{r}
+library(mclust)
+
+mc<-Mclust(try[,c(1:2)],G = 2,prior = )
+table(try$Bankruptcy,mc$classification)
+
+```
+
+
+# 主成分分析
+```{r}
+library(reshape2)
+data_Positive_select = data_select %>% filter(Bankruptcy==1)
+colnames(data_Positive_select) = paste0("V",1:26)
+data_Negative_select = data_select %>% filter(Bankruptcy==0)
+colnames(data_Negative_select) = paste0("V",1:26)
+```
+
+
+```{r}
+colnames(data_select) = paste0("V",1:26)
+pca<- prcomp(data_select, center = T, scale = T)
+
+summary(pca)
+out = as.matrix(pca$rotation)
+
+out_list = lapply(1:10, function(a){
+  which(abs(out[,a])>0.35)
+})
+```
+
+
+```{r}
+# pca_1<- prcomp(data_Positive_select[,-26], center = T, scale = T)
+# pca_0<- prcomp(data_Negative_select[,-26], center = T, scale = T)
+# 
+# summary(pca_1)
+# out = as.matrix(pca_1$rotation)
+# 
+# out_list = lapply(1:10, function(a){
+#   which(abs(out[,a])>0.35)
+# })
+```
+
+```{r}
+ggplot(melt(pca$rotation[,1:10]), aes(Var2, Var1)) +
+  geom_tile(aes(fill = value), colour = "white") +
+  scale_fill_gradient2(low = "firebrick4", high = "steelblue",
+                       mid = "white", midpoint = 0) +
+  guides(fill=guide_legend(title="Coefficient")) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),
+        axis.title = element_blank())
+
+```
+
+
+
