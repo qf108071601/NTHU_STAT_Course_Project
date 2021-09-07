@@ -1,0 +1,329 @@
+---
+title: "績優股選取"
+author: "賴冠維"
+date: "2020/12/30"
+output: html_document
+---
+### 套件
+```{r message=TRUE, warning=TRUE,message=FALSE}
+library(openxlsx)
+library(tidyverse)
+library(purrr)
+library(tibble)
+library(qs)
+library(VIM)
+library(mice)
+library(zoo)
+library(cluster)
+library(xgboost)
+library(caret)
+library(vip)
+library(pdp)
+library(rpart)
+library(rpart.plot)
+```
+
+```{r}
+nnn = 2
+```
+
+### 使用資料
+```{r}
+SheetList = qread("C:/Users/Lai/Desktop/統計學習報告/最後用到/RAW_DATA")
+filename <-"C:/Users/Lai/Desktop/統計學習報告/最後用到/FINAL.xlsx"
+Ticker = read.csv("C:/Users/Lai/Desktop/統計學習報告/最後用到/sp500_ticker_category.csv")
+EPS = qread("C:/Users/Lai/Desktop/統計學習報告/最後用到/DATA_EPS")
+filename_EPS <-"C:/Users/Lai/Desktop/統計學習報告/最後用到/NAME_EPS.xlsx"
+```
+
+### 列NA分組處理
+```{r,warning=FALSE}
+SheetList = lapply(3:120, function(x){
+  data = SheetList[[x]] %>%
+    purrr::map(~as.numeric(.)) %>%  
+    as.data.frame()
+})
+firm = c()
+firm_index = sapply(1:118, function(a){
+  x = SheetList[[a]] %>% purrr::map(~as.numeric(.)) %>%
+    as.data.frame()%>%  
+    map(~sum(is.na(.))/length(.)) %>% 
+    as.data.frame()
+  if (median(as.numeric(x[1,-1])) >0.3){
+    firm[a] = "Delete" #超過3成都是NA
+    
+  }else if (length(which(x[1,-1] < 0.3))< 16){
+    firm[a] = "Specific" # 特定幾行超過是NA
+  }else{
+    firm[a] = "Normal" #極少部分是NA
+  }
+})
+firm_index %>% table()
+```
+
+### 加上Ticker&加上Lag_EPS
+```{r}
+sheets_name <- openxlsx::getSheetNames(filename)
+sheets_name = sheets_name[-c(1,2,3)]
+names(SheetList) = sheets_name
+sheets_name_1 = sapply(1:118, function(a){
+  strsplit(sheets_name,split = " ")[[a]][1]
+})
+
+sheets_name_1 %in% Ticker$ticker %>%table()
+Ticker_c = Ticker[which(Ticker$ticker %in% sheets_name_1),] 
+E = EPS[c(2:8,10:285)]
+sheets_name_EPS <- openxlsx::getSheetNames(filename_EPS)
+names(E) = sheets_name_EPS
+EPS_index = which(sheets_name_EPS %in% sheets_name)
+E_try = E[EPS_index]
+for (i in 1:118) {
+  SheetList[[i]]$EPS = c(NA,E_try[[i]]$Diluted.EPS[-c(1,2,3)],NA)
+}
+```
+
+
+### 選取分析產業&列出NA，有超過2成NA的刪掉
+```{r}
+C = Ticker_c$category %>% table() %>% sort(.,decreasing = T) %>% as.data.frame()
+index_Select = which(Ticker_c$category==C$.[nnn]) 
+Industry_Select = SheetList[[index_Select[1]]]
+Industry_Select$Firm = Ticker_c$company[index_Select[1]]
+for (i in 2:length(index_Select)) {
+  x = SheetList[[index_Select[i]]]
+  x$Firm = Ticker_c$company[index_Select[i]]
+  Industry_Select =rbind(Industry_Select,x)
+}
+aggr_plot <- aggr(Industry_Select, col=c('navyblue','yellow'), 
+                  numbers=TRUE, sortVars=TRUE, labels=names(data), 
+                  cex.axis=.7, gap=3, ylab=c("Hist of missing data","Pattern"))
+miss = aggr_plot$missings
+delete_col = miss[which(miss$Count>0.2*nrow(Industry_Select)),]
+Industry_Select =select(Industry_Select,-delete_col$Variable)
+aggr_plot <- aggr(Industry_Select, col=c('navyblue','yellow'), 
+                  numbers=TRUE, sortVars=TRUE, labels=names(data), 
+                  cex.axis=.7, gap=3, ylab=c("Hist of missing data","Pattern"))
+Industry_Select = select(Industry_Select,-Dates)
+```
+
+
+### 填補NA & 加上時間、Y
+```{r}
+set.seed(1234)
+imputed_Data = mice(Industry_Select,
+                    m=1,
+                    maxit = 5,
+                    method = 'rf',
+                    seed = 123)
+
+Industry_Select_new = mice::complete(imputed_Data,1)
+n = length(levels(as.factor(Industry_Select_new$Firm)))
+Industry_Select_new$Dates = 
+  rep(paste(rep(2010:2020, each = 4), rep(c(3,6,9,12),10),31, sep = "-")[-44],n)
+Industry_Select_new$Dates = as.zoo(Industry_Select_new$Dates)
+Industry_Select_new$Firm = as.factor(Industry_Select_new$Firm)
+Industry_Select_new$EPS = as.numeric(Industry_Select_new$EPS)
+Industry_Select_new = na.omit(Industry_Select_new)
+s = quantile(Industry_Select_new$EPS,0.75)
+Industry_Select_new$Y = ifelse(Industry_Select_new$EPS>s,"1","0")
+```
+
+### 造Train、Test，平衡Train 
+```{r}
+set.seed(1234)
+sampid0 <- sample(0:1, dim(Industry_Select_new)[1], replace=T, prob=c(0.7, 0.3))    
+sampid <- which(sampid0 == 0)
+train=Industry_Select_new[sampid,
+                                  which(!(colnames(Industry_Select_new) %in% 
+                                            c("EPS","Firm","Dates")))]
+test=Industry_Select_new[-sampid,which(!(colnames(Industry_Select_new) %in% 
+                                                   c("EPS","Firm","Dates")))]
+#平衡資料----
+data_Positive <- train[train$Y==1,];dim(data_Positive)
+k.max <- 10
+asw <- rep(0,10)
+for(i in 2:k.max){
+  asw[i] = clara(data_Positive,i)$silinfo$avg.width
+}
+k.best <- which.max(asw)
+plot(2:10, asw[2:10],
+     type="l", pch = 19, frame = FALSE,
+     xlab="Number of clusters K",
+     ylab="Total within-clusters sum of squares")
+clustering <- clara(data_Positive,k.best)
+data_Positive_cluster <- data.frame(data_Positive,clustering$cluster)
+cluster_p = lapply(1:max(data_Positive_cluster$clustering.cluster), function(a){
+  data_Positive_cluster[data_Positive_cluster$clustering.cluster==a,][,1:ncol(train)]
+})
+cluster_p_1 = lapply(1:max(data_Positive_cluster$clustering.cluster), function(a){
+  set.seed(12345)
+  x = cluster_p[[a]]
+  x[sample(nrow(x),2*nrow(x),replace=T),]
+})
+only_1 = cluster_p_1[[1]]
+for (i in 2:length(cluster_p_1)) {
+  only_1 = rbind(only_1,cluster_p_1[[i]])
+}
+set.seed(12345)
+data_Negative <- train[train$Y==0,];dim(data_Negative)
+k.max <- 10
+asw <- rep(0,10)
+for(i in 2:k.max){
+  asw[i] = clara(data_Negative,i)$silinfo$avg.width
+}
+k.best <- which.max(asw)
+plot(2:10, asw[2:10],
+     type="l", pch = 19, frame = FALSE,
+     xlab="Number of clusters K",
+     ylab="Total within-clusters sum of squares")
+clustering <- clara(data_Negative,k.best)
+data_Negative_cluster <- data.frame(data_Negative,clustering$cluster)
+cluster_p = lapply(1:max(data_Negative_cluster$clustering.cluster), function(a){
+  data_Negative_cluster[data_Negative_cluster$clustering.cluster==a,][,1:ncol(train)]
+})
+cluster_p_1 = lapply(1:max(data_Negative_cluster$clustering.cluster), function(a){
+  set.seed(12345)
+  x = cluster_p[[a]]
+  x[sample(nrow(x),0.7*nrow(x),replace=F),]
+})
+only_0 = cluster_p_1[[1]]
+for (i in 2:length(cluster_p_1)) {
+  only_0 = rbind(only_0,cluster_p_1[[i]])
+}
+train_balance = rbind(only_0,only_1)
+train_balance$Y %>% table()
+```
+
+### XGBoost
+```{r}
+#測試決策樹數量
+xgb.params = list(
+  objective = "binary:logistic", 
+  verbose = 0,
+  subsample = 0.4,
+  colsample_bytree = 0.4,
+  seed = 1234,
+  max_depth = 4,
+  eta = 0.05, 
+  gamma = 0,
+  set.seed= 12345
+)
+cv.model <- xgb.cv(
+  data = data.matrix(subset(train_balance, select = -Y),set.seed(12345)),
+  label = train_balance$Y,
+  params = xgb.params,
+  nrounds = 1000,
+  nfold = 10,
+  print_every_n = 10,
+  early_stopping_rounds = 30,
+  eval_metric="error"
+)
+tmp = cv.model$evaluation_log
+plot(x=1:nrow(tmp), y= tmp$train_error_mean,
+     col='red', xlab="nround", ylab="Error",type="l", main="Avg.Performance in CV")
+lines(x=1:nrow(tmp), y= tmp$test_error_mean, col='blue')
+legend("topright", pch=1, col = c("red", "blue"),
+       legend = c("Train", "Validation") )
+# 獲得 best nround
+best.nrounds = cv.model$best_iteration
+best.nrounds
+# 建構模型
+xgb.model <- xgboost::xgboost(
+  data.matrix(subset(train_balance, 
+                     select = -Y)),
+  label = train_balance$Y,
+  params = xgb.params,
+  nrounds = best.nrounds,
+)
+```
+
+### Test Confusion Matrix
+```{r}
+dtest = data.matrix(subset(test, select = -Y))
+# 預測
+xgb_y = predict(xgb.model,dtest,type="response")
+xgb_y = round(xgb_y)
+xtab <- table(xgb_y,test$Y)
+print(confusionMatrix(xtab[2:1,2:1]))
+```
+
+### XGBoost模型解釋
+```{r}
+vip(xgb.model, num_features = 10)
+# # c-ICE curves and PDPs for Overall_Qual and Gr_Liv_Area
+# x <- data.matrix(subset(train_balance, select = -Y))  # training features
+# p1 <- partial(xgb.model,
+#               pred.var = "ACCT_RCV_TURN",
+#               ice = T, center = TRUE,
+#               plot = TRUE, rug = T,type = "auto",
+#               alpha = 0.1, plot.engine = "ggplot2",train = x)
+# 
+# p2 <- partial(xgb.model, pred.var = "INVENT_TURN",
+#               ice = T, center = TRUE,
+#               plot = TRUE, rug = T, type = "auto",
+#               alpha = 0.1, plot.engine = "ggplot2",train = x)
+# grid.arrange(p1, p2, ncol =2)
+```
+
+### 選出Importance 前10的變數做CART
+```{r}
+select = vip(xgb.model, num_features = 10)
+col = select$data[1]
+# CART
+train_balance_select = train_balance[,c(col$Variable,"Y")]
+test_select = test[,c(col$Variable,"Y")]
+controls=rpart.control(maxdepth= 4)
+cart.model<- rpart(Y ~. ,
+                   control = controls,
+                   data=train_balance_select,
+                   parms = list(split = "gini"))
+test_t = select(test,-Y)
+p_y = predict(cart.model,test_t,type = "class")
+xtab = table(p_y,test$Y)
+print(confusionMatrix(xtab[2:1,2:1]))
+```
+
+### 解釋CART
+```{r}
+rpart.plot(cart.model,
+           tweak = 1,cex =0.8,
+           extra = 104, # show fitted class, probs, percentages
+           box.palette = "GnBu", # color scheme
+           branch.lty = 2, # dotted branch lines
+           nn = TRUE)
+```
+
+### 用CART規則列公司
+
+```{r}
+Company_Select = 
+  Industry_Select_new[which(!(colnames(Industry_Select_new) %in%
+                                c("EPS","Firm","Dates")))]
+Company_Select_t = select(Company_Select,-Y)
+p_C = predict(cart.model,Company_Select_t,type = "class")
+x = Industry_Select_new$Firm %>% table() %>% as.matrix()
+y = Industry_Select_new$Firm[which(p_C==1)] %>%table() %>% as.matrix() 
+y/x
+```
+
+
+```{r}
+z = y/x %>% as.data.frame() 
+
+#0.75以上挑!!!
+attr(z,"row.names")[which(z$V1>0.75)]  %>% as.matrix()
+```
+
+
+
+```{r}
+# select_Company = Industry_Select_new[
+#   which(Industry_Select_new$ALTMAN_Z_SCORE<8.5&
+#           Industry_Select_new$EBIT_TO_INT_EXP>5.7&
+#           Industry_Select_new$DVD_PAYOUT_RATIO>43&
+#           Industry_Select_new$QUICK_RATIO>0.46),]
+# 
+# Industry_Select_new$Firm %>%table()
+# select_Company$Firm %>%table() %>%as.matrix()
+```
+

@@ -1,0 +1,284 @@
+ticker,company,industry,category
+GD,GD US Equity,Industrials ,Aerospace & Defense
+HII,HII US Equity,Industrials ,Aerospace & Defense
+LMT,LMT US Equity,Industrials ,Aerospace & Defense
+NOC,NOC US Equity,Industrials ,Aerospace & Defense
+RTX,RTX US Equity,Industrials ,Aerospace & Defense
+TDG,TDG US Equity,Industrials ,Aerospace & Defense
+TXT,TXT US Equity,Industrials ,Aerospace & Defense
+CF,CF US Equity,Basic Materials ,Agriculture
+FMC,FMC US Equity,Basic Materials ,Agriculture
+MOS,MOS US Equity,Basic Materials ,Agriculture
+STZ,STZ US Equity,Consumer Goods ,Beverages - Alcoholic
+TAP,TAP US Equity,Consumer Goods ,Beverages - Alcoholic
+KO,KO US Equity,Consumer Goods ,Beverages - Non-Alcoholic
+MNST,MNST US Equity,Consumer Goods ,Beverages - Non-Alcoholic
+PEP,PEP US Equity,Consumer Goods ,Beverages - Non-Alcoholic
+ALXN,ALXN US Equity,Health Care ,Biotechnology
+INCY,INCY US Equity,Health Care ,Biotechnology
+REGN,REGN US Equity,Health Care ,Biotechnology
+ALB,ALB US Equity,Basic Materials ,Chemicals
+APD,APD US Equity,Basic Materials ,Chemicals
+CE,CE US Equity,Basic Materials ,Chemicals
+DOW,DOW US Equity,Basic Materials ,Chemicals
+EMN,EMN US Equity,Basic Materials ,Chemicals
+IFF,IFF US Equity,Basic Materials ,Chemicals
+LIN,LIN US Equity,Basic Materials ,Chemicals
+LYB,LYB US Equity,Basic Materials ,Chemicals
+PPG,PPG US Equity,Basic Materials ,Chemicals
+DD,DD US Equity,Basic Materials ,Chemicals
+SHW,SHW US Equity,Basic Materials ,Chemicals
+CARR,CARR US Equity,Industrials ,Construction
+J,J US Equity,Industrials ,Construction
+JCI,JCI US Equity,Industrials ,Construction
+MAS,MAS US Equity,Industrials ,Construction
+PWR,PWR US Equity,Industrials ,Construction
+ADM,ADM US Equity,Consumer Goods ,Consumer Packaged Goods
+CAG,CAG US Equity,Consumer Goods ,Consumer Packaged Goods
+CHD,CHD US Equity,Consumer Goods ,Consumer Packaged Goods
+CL,CL US Equity,Consumer Goods ,Consumer Packaged Goods
+CLX,CLX US Equity,Consumer Goods ,Consumer Packaged Goods
+CPB,CPB US Equity,Consumer Goods ,Consumer Packaged Goods
+EL,EL US Equity,Consumer Goods ,Consumer Packaged Goods
+GIS,GIS US Equity,Consumer Goods ,Consumer Packaged Goods
+HRL,HRL US Equity,Consumer Goods ,Consumer Packaged Goods
+HSY,HSY US Equity,Consumer Goods ,Consumer Packaged Goods
+K,K US Equity,Consumer Goods ,Consumer Packaged Goods
+KHC,KHC US Equity,Consumer Goods ,Consumer Packaged Goods
+KMB,KMB US Equity,Consumer Goods ,Consumer Packaged Goods
+LW,LW US Equity,Consumer Goods ,Consumer Packaged Goods
+MDLZ,MDLZ US Equity,Consumer Goods ,Consumer Packaged Goods
+MKC,MKC US Equity,Consumer Goods ,Consumer Packaged Goods
+PG,PG US Equity,Consumer Goods ,Consumer Packaged Goods
+SJM,SJM US Equity,Consumer Goods ,Consumer Packaged Goods
+TSN,TSN US Equity,Consumer Goods ,Consumer Packaged Goods
+AXP,AXP US Equity,Financials ,Credit Services
+COF,COF US Equity,Financials ,Credit Services
+DFS,DFS US Equity,Financials ,Credit Services
+MA,MA US Equity,Financials ,Credit Services
+SYF,SYF US Equity,Financials ,Credit Services
+V,V US Equity,Financials ,Credit Services
+PYPL,PYPL US Equity,Financials ,Credit Services
+WU,WU US Equity,Financials ,Credit Services
+ABBV,ABBV US Equity,Health Care ,Drug Manufacturers
+AMGN,AMGN US Equity,Health Care ,Drug Manufacturers
+BIIB,BIIB US Equity,Health Care ,Drug Manufacturers
+BMY,BMY US Equity,Health Care ,Drug Manufacturers
+CTLT,CTLT US Equity,Health Care ,Drug Manufacturers
+GILD,GILD US Equity,Health Care ,Drug Manufacturers
+JNJ,JNJ US Equity,Health Care ,Drug Manufacturers
+LLY,LLY US Equity,Health Care ,Drug Manufacturers
+MRK,MRK US Equity,Health Care ,Drug Manufacturers
+PFE,PFE US Equity,Health Care ,Drug Manufacturers
+PRGO,PRGO US Equity,Health Care ,Drug Manufacturers
+VTRS,VTRS US Equity,Health Care ,Drug Manufacturers
+ZTS,ZTS US Equity,Health Care ,Drug Manufacturers
+GRMN,GRMN US Equity,Technology ,Hardware
+APH,APH US Equity,Technology ,Hardware
+FTV,FTV US Equity,Technology ,Hardware
+GLW,GLW US Equity,Technology ,Hardware
+KEYS,KEYS US Equity,Technology ,Hardware
+TEL,TEL US Equity,Technology ,Hardware
+ZBRA,ZBRA US Equity,Technology ,Hardware
+AAPL,AAPL US Equity,Technology ,Hardware
+ANET,ANET US Equity,Technology ,Hardware
+CSCO,CSCO US Equity,Technology ,Hardware
+HPE,HPE US Equity,Technology ,Hardware
+HPQ,HPQ US Equity,Technology ,Hardware
+MSI,MSI US Equity,Technology ,Hardware
+NTAP,NTAP US Equity,Technology ,Hardware
+STX,STX US Equity,Technology ,Hardware
+WDC,WDC US Equity,Technology ,Hardware
+WBA,WBA US Equity,Health Care ,Healthcare Providers & Services
+DVA,DVA US Equity,Health Care ,Healthcare Providers & Services
+HCA,HCA US Equity,Health Care ,Healthcare Providers & Services
+UHS,UHS US Equity,Health Care ,Healthcare Providers & Services
+CERN,CERN US Equity,Health Care ,Healthcare Providers & Services
+AME,AME US Equity,Industrials ,Industrial Products
+CMI,CMI US Equity,Industrials ,Industrial Products
+DOV,DOV US Equity,Industrials ,Industrial Products
+EMR,EMR US Equity,Industrials ,Industrial Products
+ETN,ETN US Equity,Industrials ,Industrial Products
+GE,GE US Equity,Industrials ,Industrial Products
+HON,HON US Equity,Industrials ,Industrial Products
+IEX,IEX US Equity,Industrials ,Industrial Products
+IR,IR US Equity,Industrials ,Industrial Products
+ITW,ITW US Equity,Industrials ,Industrial Products
+MMM,MMM US Equity,Industrials ,Industrial Products
+OTIS,OTIS US Equity,Industrials ,Industrial Products
+PH,PH US Equity,Industrials ,Industrial Products
+ROK,ROK US Equity,Industrials ,Industrial Products
+SWK,SWK US Equity,Industrials ,Industrial Products
+TT,TT US Equity,Industrials ,Industrial Products
+XYL,XYL US Equity,Industrials ,Industrial Products
+ROP,ROP US Equity,Technology ,Industrial Products
+AFL,AFL US Equity,Financials ,Insurance
+AIG,AIG US Equity,Financials ,Insurance
+AJG,AJG US Equity,Financials ,Insurance
+ALL,ALL US Equity,Financials ,Insurance
+AON,AON US Equity,Financials ,Insurance
+CB,CB US Equity,Financials ,Insurance
+CINF,CINF US Equity,Financials ,Insurance
+HIG,HIG US Equity,Financials ,Insurance
+MET,MET US Equity,Financials ,Insurance
+MMC,MMC US Equity,Financials ,Insurance
+PFG,PFG US Equity,Financials ,Insurance
+PGR,PGR US Equity,Financials ,Insurance
+PRU,PRU US Equity,Financials ,Insurance
+TRV,TRV US Equity,Financials ,Insurance
+WLTW,WLTW US Equity,Financials ,Insurance
+ATVI,ATVI US Equity,Consumer Services ,Interactive Media
+EA,EA US Equity,Consumer Services ,Interactive Media
+TTWO,TTWO US Equity,Consumer Services ,Interactive Media
+FB,FB US Equity,Consumer Services ,Interactive Media
+GOOGL,GOOGL US Equity,Consumer Services ,Interactive Media
+TWTR,TWTR US Equity,Consumer Services ,Interactive Media
+HBI,HBI US Equity,Consumer Goods ,Manufacturing - Apparel & Accessories
+NKE,NKE US Equity,Consumer Goods ,Manufacturing - Apparel & Accessories
+PVH,PVH US Equity,Consumer Goods ,Manufacturing - Apparel & Accessories
+RL,RL US Equity,Consumer Goods ,Manufacturing - Apparel & Accessories
+UAA,UAA US Equity,Consumer Goods ,Manufacturing - Apparel & Accessories
+VFC,VFC US Equity,Consumer Goods ,Manufacturing - Apparel & Accessories
+CHTR,CHTR US Equity,Consumer Services ,Media - Diversified
+CMCSA,CMCSA US Equity,Consumer Services ,Media - Diversified
+DIS,DIS US Equity,Consumer Services ,Media - Diversified
+DISCA,DISCA US Equity,Consumer Services ,Media - Diversified
+DISH,DISH US Equity,Consumer Services ,Media - Diversified
+FOXA,FOXA US Equity,Consumer Services ,Media - Diversified
+IPG,IPG US Equity,Consumer Services ,Media - Diversified
+LYV,LYV US Equity,Consumer Services ,Media - Diversified
+NFLX,NFLX US Equity,Consumer Services ,Media - Diversified
+NWSA,NWSA US Equity,Consumer Services ,Media - Diversified
+OMC,OMC US Equity,Consumer Services ,Media - Diversified
+VIAC,VIAC US Equity,Consumer Services ,Media - Diversified
+ABT,ABT US Equity,Health Care ,Medical Devices & Instruments
+ALGN,ALGN US Equity,Health Care ,Medical Devices & Instruments
+BAX,BAX US Equity,Health Care ,Medical Devices & Instruments
+BDX,BDX US Equity,Health Care ,Medical Devices & Instruments
+BIO,BIO US Equity,Health Care ,Medical Devices & Instruments
+BSX,BSX US Equity,Health Care ,Medical Devices & Instruments
+COO,COO US Equity,Health Care ,Medical Devices & Instruments
+EW,EW US Equity,Health Care ,Medical Devices & Instruments
+HOLX,HOLX US Equity,Health Care ,Medical Devices & Instruments
+ISRG,ISRG US Equity,Health Care ,Medical Devices & Instruments
+MDT,MDT US Equity,Health Care ,Medical Devices & Instruments
+RMD,RMD US Equity,Health Care ,Medical Devices & Instruments
+STE,STE US Equity,Health Care ,Medical Devices & Instruments
+SYK,SYK US Equity,Health Care ,Medical Devices & Instruments
+TFX,TFX US Equity,Health Care ,Medical Devices & Instruments
+VAR,VAR US Equity,Health Care ,Medical Devices & Instruments
+WST,WST US Equity,Health Care ,Medical Devices & Instruments
+ZBH,ZBH US Equity,Health Care ,Medical Devices & Instruments
+FCX,FCX US Equity,Basic Materials ,Metals & Mining
+NEM,NEM US Equity,Basic Materials ,Metals & Mining
+BKR,BKR US Equity,Energy,Oil & Gas
+COP,COP US Equity,Energy,Oil & Gas
+CVX,CVX US Equity,Energy,Oil & Gas
+EOG,EOG US Equity,Energy,Oil & Gas
+HAL,HAL US Equity,Energy,Oil & Gas
+HES,HES US Equity,Energy,Oil & Gas
+KMI,KMI US Equity,Energy,Oil & Gas
+MPC,MPC US Equity,Energy,Oil & Gas
+OKE,OKE US Equity,Energy,Oil & Gas
+OXY,OXY US Equity,Energy,Oil & Gas
+PSX,PSX US Equity,Energy,Oil & Gas
+PXD,PXD US Equity,Energy,Oil & Gas
+SLB,SLB US Equity,Energy,Oil & Gas
+WMB,WMB US Equity,Energy,Oil & Gas
+CMG,CMG US Equity,Consumer Services ,Restaurants
+DPZ,DPZ US Equity,Consumer Services ,Restaurants
+DRI,DRI US Equity,Consumer Services ,Restaurants
+MCD,MCD US Equity,Consumer Services ,Restaurants
+SBUX,SBUX US Equity,Consumer Services ,Restaurants
+YUM,YUM US Equity,Consumer Services ,Restaurants
+AMZN,AMZN US Equity,Consumer Services ,Retail - Cyclical
+AZO,AZO US Equity,Consumer Services ,Retail - Cyclical
+BBY,BBY US Equity,Consumer Services ,Retail - Cyclical
+EBAY,EBAY US Equity,Consumer Services ,Retail - Cyclical
+ETSY,ETSY US Equity,Consumer Services ,Retail - Cyclical
+HD,HD US Equity,Consumer Services ,Retail - Cyclical
+LOW,LOW US Equity,Consumer Services ,Retail - Cyclical
+ORLY,ORLY US Equity,Consumer Services ,Retail - Cyclical
+ROST,ROST US Equity,Consumer Services ,Retail - Cyclical
+TJX,TJX US Equity,Consumer Services ,Retail - Cyclical
+TSCO,TSCO US Equity,Consumer Services ,Retail - Cyclical
+COST,COST US Equity,Consumer Services ,Retail - Defensive
+DG,DG US Equity,Consumer Services ,Retail - Defensive
+DLTR,DLTR US Equity,Consumer Services ,Retail - Defensive
+KR,KR US Equity,Consumer Services ,Retail - Defensive
+SYY,SYY US Equity,Consumer Services ,Retail - Defensive
+TGT,TGT US Equity,Consumer Services ,Retail - Defensive
+WMT,WMT US Equity,Consumer Services ,Retail - Defensive
+ADI,ADI US Equity,Technology ,Semiconductors
+AMAT,AMAT US Equity,Technology ,Semiconductors
+AMD,AMD US Equity,Technology ,Semiconductors
+AVGO,AVGO US Equity,Technology ,Semiconductors
+INTC,INTC US Equity,Technology ,Semiconductors
+KLAC,KLAC US Equity,Technology ,Semiconductors
+LRCX,LRCX US Equity,Technology ,Semiconductors
+MCHP,MCHP US Equity,Technology ,Semiconductors
+MU,MU US Equity,Technology ,Semiconductors
+MXIM,MXIM US Equity,Technology ,Semiconductors
+NVDA,NVDA US Equity,Technology ,Semiconductors
+QCOM,QCOM US Equity,Technology ,Semiconductors
+QRVO,QRVO US Equity,Technology ,Semiconductors
+SWKS,SWKS US Equity,Technology ,Semiconductors
+TER,TER US Equity,Technology ,Semiconductors
+TXN,TXN US Equity,Technology ,Semiconductors
+XLNX,XLNX US Equity,Technology ,Semiconductors
+ACN,ACN US Equity,Technology ,Software
+FIS,FIS US Equity,Technology ,Software
+FISV,FISV US Equity,Technology ,Software
+ADBE,ADBE US Equity,Technology ,Software
+ADSK,ADSK US Equity,Technology ,Software
+CRM,CRM US Equity,Technology ,Software
+IBM,IBM US Equity,Technology ,Software
+INTU,INTU US Equity,Technology ,Software
+NOW,NOW US Equity,Technology ,Software
+ORCL,ORCL US Equity,Technology ,Software
+AAL,AAL US Equity,Industrials ,Transportation
+ALK,ALK US Equity,Industrials ,Transportation
+DAL,DAL US Equity,Industrials ,Transportation
+UAL,UAL US Equity,Industrials ,Transportation
+CHRW,CHRW US Equity,Industrials ,Transportation
+CSX,CSX US Equity,Industrials ,Transportation
+EXPD,EXPD US Equity,Industrials ,Transportation
+FDX,FDX US Equity,Industrials ,Transportation
+JBHT,JBHT US Equity,Industrials ,Transportation
+KSU,KSU US Equity,Industrials ,Transportation
+NSC,NSC US Equity,Industrials ,Transportation
+ODFL,ODFL US Equity,Industrials ,Transportation
+UNP,UNP US Equity,Industrials ,Transportation
+UPS,UPS US Equity,Industrials ,Transportation
+WAB,WAB US Equity,Industrials ,Transportation
+HAS,HAS US Equity,Consumer Goods ,Travel & Leisure
+POOL,POOL US Equity,Consumer Goods ,Travel & Leisure
+BKNG,BKNG US Equity,Consumer Services ,Travel & Leisure
+CCL,CCL US Equity,Consumer Services ,Travel & Leisure
+EXPE,EXPE US Equity,Consumer Services ,Travel & Leisure
+HLT,HLT US Equity,Consumer Services ,Travel & Leisure
+LVS,LVS US Equity,Consumer Services ,Travel & Leisure
+MAR,MAR US Equity,Consumer Services ,Travel & Leisure
+MGM,MGM US Equity,Consumer Services ,Travel & Leisure
+NCLH,NCLH US Equity,Consumer Services ,Travel & Leisure
+RCL,RCL US Equity,Consumer Services ,Travel & Leisure
+WYNN,WYNN US Equity,Consumer Services ,Travel & Leisure
+NRG,NRG US Equity,Utilities ,Utilities - Independent Power Producers
+AEE,AEE US Equity,Utilities ,Utilities - Regulated
+AEP,AEP US Equity,Utilities ,Utilities - Regulated
+CMS,CMS US Equity,Utilities ,Utilities - Regulated
+D,D US Equity,Utilities ,Utilities - Regulated
+DTE,DTE US Equity,Utilities ,Utilities - Regulated
+DUK,DUK US Equity,Utilities ,Utilities - Regulated
+ED,ED US Equity,Utilities ,Utilities - Regulated
+EIX,EIX US Equity,Utilities ,Utilities - Regulated
+ES,ES US Equity,Utilities ,Utilities - Regulated
+ETR,ETR US Equity,Utilities ,Utilities - Regulated
+EXC,EXC US Equity,Utilities ,Utilities - Regulated
+NEE,NEE US Equity,Utilities ,Utilities - Regulated
+PEG,PEG US Equity,Utilities ,Utilities - Regulated
+PPL,PPL US Equity,Utilities ,Utilities - Regulated
+SO,SO US Equity,Utilities ,Utilities - Regulated
+SRE,SRE US Equity,Utilities ,Utilities - Regulated
+WEC,WEC US Equity,Utilities ,Utilities - Regulated
+XEL,XEL US Equity,Utilities ,Utilities - Regulated
