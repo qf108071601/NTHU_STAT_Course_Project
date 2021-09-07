@@ -1,0 +1,428 @@
+---
+title: "統學模型+EDA"
+author: "賴冠維"
+date: "2020/12/26"
+output: html_document
+---
+### 資料型態設定
+```{r}
+library(tidyverse)
+
+train = read.csv("C:/Users/Lai/Desktop/統學期末/train.csv")
+
+# x=19
+# data[,x] %>%table();colnames(data[x])
+
+# Ordinal: 2 9 
+for (i in c(2,9,21,22)) {
+  train[,i] = factor(train[,i],order = TRUE)
+}
+# 數值: 4 5 6 9
+for (i in c(4:6,9)) {
+  train[,i] = as.numeric(train[,i])
+}
+
+for (i in c(1,3,7:8,10:20)) {
+  train[,i] = factor(train[,i])
+}
+```
+
+### 資料平衡
+因為Y值不平衡，先將Y分群後，進行重抽樣讓train_data 平衡
+```{r}
+library(cluster)
+#平衡資料----
+data_Positive <- train[train$Benign_malignant_cancer==1,];dim(data_Positive)
+k.max <- 10
+asw <- rep(0,10)
+for(i in 2:k.max){
+  asw[i] = clara(data_Positive,i)$silinfo$avg.width
+}
+
+k.best <- which.max(asw)
+print(k.best)
+plot(2:10, asw[2:10],
+     type="l", pch = 19, frame = FALSE,
+     xlab="Number of clusters K",
+     ylab="Total within-clusters sum of squares")
+
+
+clustering <- clara(data_Positive,k.best)
+data_Positive_cluster <- data.frame(data_Positive, clustering$cluster)
+
+cluster1 <- data_Positive_cluster[data_Positive_cluster$clustering.cluster==1,][,1:23]
+cluster2 <- data_Positive_cluster[data_Positive_cluster$clustering.cluster==2,][,1:23]
+
+set.seed(12345)
+n1 = cluster1[sample(nrow(cluster1), 1*nrow(cluster1),replace = T), ]
+n2 = cluster2[sample(nrow(cluster2), 1*nrow(cluster2),replace = T), ]
+
+only_1 = rbind(n1,n2)
+
+# Negative
+##########
+data_Negative <- train[train$Benign_malignant_cancer==0,];dim(data_Negative)
+k.max <- 10
+asw <- rep(0,10)
+for(i in 2:k.max){
+  asw[i] = clara(data_Negative,i)$silinfo$avg.width
+}
+
+k.best <- which.max(asw)
+print(k.best)
+plot(2:10, asw[2:10],
+     type="l", pch = 19, frame = FALSE,
+     xlab="Number of clusters K",
+     ylab="Total within-clusters sum of squares")
+
+
+clustering <- clara(data_Negative,6)
+data_Negative_cluster <- data.frame(data_Negative, clustering$cluster)
+
+cluster1 <- data_Negative_cluster[data_Negative_cluster$clustering.cluster==1,][,1:23]
+cluster2 <- data_Negative_cluster[data_Negative_cluster$clustering.cluster==2,][,1:23]
+cluster3 <- data_Negative_cluster[data_Negative_cluster$clustering.cluster==3,][,1:23]
+cluster4 <- data_Negative_cluster[data_Negative_cluster$clustering.cluster==4,][,1:23]
+cluster5 <- data_Negative_cluster[data_Negative_cluster$clustering.cluster==5,][,1:23]
+cluster6 <- data_Negative_cluster[data_Negative_cluster$clustering.cluster==6,][,1:23]
+
+set.seed(12345)
+n1 = cluster1[sample(nrow(cluster1), 1.5*nrow(cluster1),replace = T), ]
+n2 = cluster2[sample(nrow(cluster2), 1.5*nrow(cluster2),replace = T), ]
+n3 = cluster3[sample(nrow(cluster3), 1.5*nrow(cluster3),replace = T), ]
+n4 = cluster4[sample(nrow(cluster4), 1.5*nrow(cluster4),replace = T), ]
+n5 = cluster5[sample(nrow(cluster5), 1.5*nrow(cluster5),replace = T), ]
+n6 = cluster6[sample(nrow(cluster6), 1.5*nrow(cluster6),replace = T), ]
+
+only_0 = rbind(n1,n2,n3,n4,n5,n6)
+
+train_balance = rbind(only_0,only_1)
+train_balance$Benign_malignant_cancer %>% table()
+```
+
+### 設定test資料
+```{r}
+test = read.csv("C:/Users/Lai/Desktop/統學期末/test.csv")
+
+# Ordinal: 2 9 
+for (i in c(2,9,21,22)) {
+  test[,i] = factor(test[,i],order = TRUE)
+}
+# 數值: 4 5 6 9
+for (i in c(4:6,9)) {
+  test[,i] = as.numeric(test[,i])
+}
+
+for (i in c(1,3,7:8,10:20)) {
+  test[,i] = factor(test[,i])
+}
+```
+
+### 模型
+跑XGBoost
+```{r}
+#### ##############
+library(xgboost)
+
+#測試決策樹數量
+xgb.params = list(
+  objective = "binary:logistic", 
+  verbose = 0,
+  subsample = 0.6,
+  colsample_bytree = 0.6,
+  seed = 1,
+  max_depth = 4,
+  eta = 0.07, 
+  gamma = 0,
+  set.seed= 12345
+  )
+
+
+cv.model <- xgb.cv(
+  data = data.matrix(subset(train_balance, select = -Benign_malignant_cancer),set.seed(12345)),
+  label = train_balance$Benign_malignant_cancer,
+  params = xgb.params,
+  nrounds = 500,
+  nfold = 10,
+  print_every_n = 10,
+  early_stopping_rounds = 30,
+  eval_metric="error"
+)
+```
+
+獲得最佳樹個數
+```{r}
+tmp = cv.model$evaluation_log
+
+plot(x=1:nrow(tmp), y= tmp$train_error_mean,
+     col='red', xlab="nround", ylab="Error",type="l", main="Avg.Performance in CV")
+lines(x=1:nrow(tmp), y= tmp$test_error_mean, col='blue')
+legend("topright", pch=1, col = c("red", "blue"),
+       legend = c("Train", "Validation") )
+
+# 獲得 best nround
+best.nrounds = cv.model$best_iteration
+best.nrounds
+```
+
+以 Confusion Matrix 來看預測效果
+```{r}
+# 建構模型
+xgb.model <- xgboost::xgboost(
+  data.matrix(subset(train_balance, 
+                     select = -Benign_malignant_cancer)),
+  label = train_balance$Benign_malignant_cancer,
+  params = xgb.params,
+  nrounds = best.nrounds,
+)
+
+dtest = data.matrix(subset(test, select = -Benign_malignant_cancer))
+
+# 預測
+xgb_y = predict(xgb.model,dtest,type="response")
+xgb_y = round(xgb_y)
+
+library(caret)
+xtab <- table(xgb_y,test$Benign_malignant_cancer)
+
+xtab
+print(confusionMatrix(xtab[2:1,2:1]))
+```
+
+看 importance plot 找出那些變數具有解釋力
+```{r}
+library(vip)
+vip(xgb.model, num_features = 10)
+select = vip(xgb.model, num_features = 10)
+# 10 is the default
+col = select$data[1]
+```
+
+畫 Partial Dependence Plot 看個別變數對估計Y的效果 
+```{r}
+library(pdp)
+# c-ICE curves and PDPs for Overall_Qual and Gr_Liv_Area
+x <- data.matrix(subset(train, select = -Benign_malignant_cancer))  # training features
+p1 <- partial(xgb.model,
+              pred.var = "age",
+              ice = T, center = TRUE,
+              plot = TRUE, rug = T,type = "auto",
+              alpha = 0.1, plot.engine = "ggplot2",train = x)
+
+p2 <- partial(xgb.model, pred.var = "weight",
+              ice = T, center = TRUE,
+              plot = TRUE, rug = T, type = "auto",
+              alpha = 0.1, plot.engine = "ggplot2",train = x)
+
+# Figure 2
+grid.arrange(p1, p2, ncol =2)
+```
+
+### 模型二
+將Boosting Importance Plot跑出的前十名變數帶入CART，尋找變數間關係
+```{r}
+# CART
+train_balance_select = train_balance[,c(col$Variable,"Benign_malignant_cancer")]
+test_select = test[,c(col$Variable,"Benign_malignant_cancer")]
+
+library(rpart)
+library(rpart.plot)
+controls=rpart.control(minsplit=300,
+                      minbucket=100,
+                      maxdepth= 4,
+                      cp=0.03)
+
+cart.model<- rpart(Benign_malignant_cancer ~. ,
+                   method = "class",
+                   xval= 30,
+                   control = controls,
+                   data=train_balance_select,
+                   parms = list(split = "information"))
+
+rpart.plot(cart.model,
+           tweak = 1,cex =0.8,
+           extra = 104, # show fitted class, probs, percentages
+           box.palette = "GnBu", # color scheme
+           branch.lty = 2, # dotted branch lines
+           nn = TRUE)
+
+pred = predict(cart.model,test_select,type="class")
+
+library(caret)
+xtab <- table(pred,test_select$Benign_malignant_cancer)
+print(confusionMatrix(xtab[2:1,2:1]))
+
+```
+
+
+### EDA 
+將上述結果以Histogram呈現
+```{r}
+data = read.csv("C:/Users/Lai/Desktop/統學期末/data.csv")
+
+data = data[,c(col$Variable,"Benign_malignant_cancer")]
+
+ceiling_dec = function(x,level=1)round(x-5*10^(-level-1),level)
+data$age = ceiling_dec(data$age,-1)
+data$weight = ceiling_dec(data$weight,-1)
+data$thickness_tumor = ceiling_dec(data$thickness_tumor,1)
+```
+
+Age to Weight
+```{r}
+x = data %>%
+  group_by(age,weight,Benign_malignant_cancer) %>%
+  summarise(Benign_malignant_cancer) %>%
+  table() %>% as.data.frame()
+
+x %>%
+  filter(weight %in% c(60,70,80,90)) %>%
+  group_by(weight,age,Benign_malignant_cancer) %>%
+  summarise(Freq) %>%
+  ggplot(mapping = aes(
+    x = age, fill = Benign_malignant_cancer, y = Freq))+
+  geom_col(position =position_dodge(1),width = 0.8)+
+  geom_text(aes(label=Freq),
+            position = position_dodge(width = 1),
+            vjust=-0.5,
+            color="black", size=3.8)+
+  theme(axis.text.x = element_text(vjust=0.5,size=10),
+        legend.text=element_text(size=10),legend.title=element_text(size=10))+
+  facet_wrap(weight~.,ncol = 6,scales = c("free_x"),
+             #labeller = blood_type
+  )
+
+```
+
+Blood to weight
+```{r}
+x = data %>%
+  group_by(weight,blood,Benign_malignant_cancer) %>%
+  summarise(Benign_malignant_cancer) %>%
+  table() %>% as.data.frame()
+
+x %>%
+  group_by(weight,blood,Benign_malignant_cancer) %>%
+  summarise(Freq) %>%
+  ggplot(mapping = aes(
+    x = weight, fill = Benign_malignant_cancer, y = Freq))+
+  geom_col(position =position_dodge(1),width = 0.8)+
+  geom_text(aes(label=Freq),
+            position = position_dodge(width = 1),
+            vjust=-0.5,
+            color="black", size=3.8)+
+  theme(axis.text.x = element_text(vjust=0.5,size=10),
+        legend.text=element_text(size=10),legend.title=element_text(size=10))+
+  facet_wrap(blood~.,ncol = 4,scales = c("free_x"),
+             #labeller = blood_type
+             )
+
+```
+
+Blood to age
+```{r}
+x = data %>%
+  group_by(age,blood,Benign_malignant_cancer) %>%
+  summarise(Benign_malignant_cancer) %>%
+  table() %>% as.data.frame()
+
+x %>%
+  group_by(age,blood,Benign_malignant_cancer) %>%
+  summarise(Freq) %>%
+  ggplot(mapping = aes(
+    x = age, fill = Benign_malignant_cancer, y = Freq))+
+  geom_col(position =position_dodge(1),width = 0.8)+
+  geom_text(aes(label=Freq),
+            position = position_dodge(width = 1),
+            vjust=-0.5,
+            color="black", size=3.5)+
+  theme(axis.text.x = element_text(vjust=0.5,size=10),
+        legend.text=element_text(size=10),legend.title=element_text(size=10))+
+  facet_wrap(blood~.,ncol = 4,scales = c("free_x"),
+             #labeller = blood_type
+  )
+```
+
+blood to giving_birth
+```{r}
+x = data %>%
+  group_by(blood,giving_birth,Benign_malignant_cancer) %>%
+  summarise(Benign_malignant_cancer) %>%
+  table() %>% as.data.frame()
+
+x %>%
+  group_by(blood,giving_birth,Benign_malignant_cancer) %>%
+  summarise(Freq) %>%
+  ggplot(mapping = aes(
+    x = giving_birth, fill = Benign_malignant_cancer, y = Freq))+
+  geom_col(position =position_dodge(1),width = 0.8)+
+  geom_text(aes(label=Freq),
+            position = position_dodge(width = 1),
+            vjust=-0.5,
+            color="black", size=3.5)+
+  theme(axis.text.x = element_text(vjust=0.5,size=10),
+        legend.text=element_text(size=10),legend.title=element_text(size=10))+
+  facet_wrap(blood~.,ncol = 4,scales = c("free_x"),
+             #labeller = blood_type
+  )
+```
+
+
+```{r}
+# blood to alcohol
+x = data %>%
+  group_by(blood,alcohol,Benign_malignant_cancer) %>%
+  summarise(Benign_malignant_cancer) %>%
+  table() %>% as.data.frame()
+
+x %>%
+  group_by(blood,alcohol,Benign_malignant_cancer) %>%
+  summarise(Freq) %>%
+  ggplot(mapping = aes(
+    x = alcohol, fill = Benign_malignant_cancer, y = Freq))+
+  geom_col(position =position_dodge(1),width = 0.8)+
+  geom_text(aes(label=Freq),
+            position = position_dodge(width = 1),
+            vjust=-0.5,
+            color="black", size=3.5)+
+  theme(axis.text.x = element_text(vjust=0.5,size=10),
+        legend.text=element_text(size=10),legend.title=element_text(size=10))+
+  facet_wrap(blood~.,ncol = 4,scales = c("free_x"),
+             #labeller = blood_type
+  )
+```
+
+
+
+### EDA 對變數畫pairs
+```{r}
+data = read.csv("C:/Users/Lai/Desktop/統學期末/data.csv")
+
+library(GGally)
+
+# 類別型 -c(4,5,6)
+data[,c(7:12)] %>%
+  ggpairs(., mapping= aes(color = as.factor(data$Benign_malignant_cancer)),
+          proportions = "auto",
+          lower = list(continuous = wrap("box_no_facet")),
+          upper = list(continuous = wrap("cor")),
+          diag = list(continuous = wrap("barDiag")),
+          title = "Residual Correlation (USA) ")
+
+```
+
+### 畫Spearman Rank Correlation
+```{r}
+library(corrplot)
+data = read.csv("C:/Users/Lai/Desktop/統學期末/data.csv")
+
+data %>%
+  select(.,-age,-weight,-giving_birth) %>%
+  cor(., method = "spearman") %>%
+  corrplot(., method = "color", type = "upper",
+           tl.col = "black",tl.srt = 35, diag = T, tl.cex = 0.65)
+```
+
+
+
+

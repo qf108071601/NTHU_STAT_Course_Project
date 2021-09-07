@@ -1,0 +1,632 @@
+---
+title: "Final"
+author: "統學"
+date: "2021/1/4"
+output: html_document
+---
+
+# Introduction:
+
+為了增加市佔率，銀行會大量發行信用卡，但也會發行給那些沒有能力償還信用貸款的人，為降低銀行呆帳問題，希望藉由台灣地區信用卡客戶的不同人口統計資料和過去消費及還款紀錄，能夠找出哪些變量對於客戶是否延持繳款具有顯著的影響，以改善銀行信用管制標準。
+
+
+```{r,echo=FALSE,warning=FALSE,message=FALSE}
+knitr::opts_chunk$set(echo = F,warning=F,cache=T,message = F)
+require(dplyr)
+require(tidyverse)
+require(kableExtra)
+require(GGally)
+require(car)
+require(RColorBrewer)
+require(hrbrthemes)
+require(nortest)
+require(gridExtra)
+require(grid)
+require(viridis)
+require(glmnet)
+require(leaps)
+require(pROC)
+require(RColorBrewer)
+require(InformationValue)
+require(caret)
+require(MASS)
+require(class) 
+require(magrittr)
+require(corrplot)
+require(magrittr)
+```
+
+#### Confusion Matrix Function 混淆矩陣函數
+
+```{r,echo=FALSE,warning=FALSE,message=FALSE}
+ draw_confusion_matrix <- function(cm) {
+
+  layout(matrix(c(1,1,2)))
+  par(mar=c(2,2,2,2))
+  plot(c(100, 345), c(300, 450), type = "n", xlab="", ylab="", xaxt='n', yaxt='n')
+  title('CONFUSION MATRIX', cex.main=2)
+
+  # create the matrix 
+  rect(150, 430, 240, 370, col='#AAE0D3')
+  text(195, 435, "Nondefult", cex=1.2)
+  rect(250, 430, 340, 370, col='#9DCBE4')
+  text(295, 435, "Default", cex=1.2)
+  text(125, 370, 'Predicted', cex=1.3, srt=90, font=2)
+  text(245, 450, 'Actual', cex=1.3, font=2)
+  rect(150, 305, 240, 365, col='#9DCBE4')
+  rect(250, 305, 340, 365, col='#AAE0D3')
+  text(140, 400, "Nondefult", cex=1.2, srt=90)
+  text(140, 335, "Default", cex=1.2, srt=90)
+
+  # add in the cm results 
+  res <- as.numeric(cm$table)
+  text(195, 400, res[1], cex=1.6, font=2, col='white')
+  text(195, 335, res[2], cex=1.6, font=2, col='white')
+  text(295, 400, res[3], cex=1.6, font=2, col='white')
+  text(295, 335, res[4], cex=1.6, font=2, col='white')
+
+  # add in the specifics 
+  plot(c(100, 0), c(100, 0), type = "n", xlab="", ylab="", main = "DETAILS", xaxt='n', yaxt='n')
+  text(10, 85, names(cm$byClass[1]), cex=1.2, font=2)
+  text(10, 70, round(as.numeric(cm$byClass[1]), 3), cex=1.2)
+  text(30, 85, names(cm$byClass[2]), cex=1.2, font=2)
+  text(30, 70, round(as.numeric(cm$byClass[2]), 3), cex=1.2)
+  text(50, 85, names(cm$byClass[5]), cex=1.2, font=2)
+  text(50, 70, round(as.numeric(cm$byClass[5]), 3), cex=1.2)
+  text(70, 85, names(cm$byClass[6]), cex=1.2, font=2)
+  text(70, 70, round(as.numeric(cm$byClass[6]), 3), cex=1.2)
+  text(90, 85, names(cm$byClass[7]), cex=1.2, font=2)
+  text(90, 70, round(as.numeric(cm$byClass[7]), 3), cex=1.2)
+
+  # add in the accuracy information 
+  text(30, 35, names(cm$overall[1]), cex=1.5, font=2)
+  text(30, 20, round(as.numeric(cm$overall[1]), 3), cex=1.4)
+}  
+
+```
+
+
+#### ROC Curve Function
+```{r,echo=FALSE,warning=FALSE,message=FALSE}
+specificity=function (actuals, predictedScores, threshold = 0.001) 
+{
+    predicted_dir <- ifelse(predictedScores < threshold, 0, 1)
+    actual_dir <- actuals
+    no_without_and_predicted_to_not_have_event <- sum(actual_dir != 
+        1 & predicted_dir != 1, na.rm = T)
+    no_without_event <- sum(actual_dir != 1, na.rm = T)
+    return(no_without_and_predicted_to_not_have_event/no_without_event)
+}
+sensitivity=function (actuals, predictedScores, threshold = 0.001) 
+{
+    predicted_dir <- ifelse(predictedScores < threshold, 0, 1)
+    actual_dir <- actuals
+    no_with_and_predicted_to_have_event <- sum(actual_dir == 
+        1 & predicted_dir == 1, na.rm = T)
+    no_with_event <- sum(actual_dir == 1, na.rm = T)
+    return(no_with_and_predicted_to_have_event/no_with_event)
+}
+AUROC=function (actuals, predictedScores) 
+{
+    numrow = length(seq(max(predictedScores, 1, na.rm = T), (min(predictedScores, 
+        0, na.rm = T) - 0.02), by = -0.02))
+    df <- as.data.frame(matrix(numeric(numrow * 2), ncol = 2))
+    names(df) <- c("One_minus_specificity", "sensitivity")
+    rowcount = 1
+    getFprTpr <- function(actuals, predictedScores, threshold = 0.001 ){
+        return(list(1 - specificity(actuals = actuals, predictedScores = predictedScores, 
+            threshold = threshold), sensitivity(actuals = actuals, 
+            predictedScores = predictedScores, threshold = threshold)))
+    }
+    for (threshold in seq(max(predictedScores, 1, na.rm = T), 
+        (min(predictedScores, 0, na.rm = T) - 0.02), by = -0.02)) {
+        df[rowcount, ] <- getFprTpr(actuals = actuals, predictedScores = predictedScores, 
+            threshold = threshold)
+        rowcount <- rowcount + 1
+    }
+    df <- data.frame(df, Threshold = seq(max(predictedScores, 
+        1, na.rm = T), (min(predictedScores, 0, na.rm = T) - 
+        0.02), by = -0.02))
+    auROC <- 0
+    for (point in c(2:nrow(df))) {
+        x1 <- df[point - 1, 1]
+        x2 <- df[point, 1]
+        y1 <- df[point - 1, 2]
+        y2 <- df[point, 2]
+        rect_x <- x2 - x1
+        rect_y <- y1
+        rect_area <- rect_x * rect_y
+        triangle_area <- rect_x * (y2 - y1) * 0.5
+        currArea <- rect_area + triangle_area
+        auROC <- auROC + currArea
+    }
+    totalArea <- (max(df[, 1]) * max(df[, 2]))
+    return(auROC/totalArea)
+}
+
+ROC.plot.rv<-function (actuals, predictedScores) 
+{
+    One_minus_specificity <- Threshold.show <- NULL
+    numrow = length(seq(max(predictedScores, 1, na.rm = T), (min(predictedScores, 
+        0, na.rm = T) - 0.02), by = -0.02))
+    df <- as.data.frame(matrix(numeric(numrow * 2), ncol = 2))
+    names(df) <- c("One_minus_specificity", "sensitivity")
+    rowcount = 1
+    getFprTpr <- function(actuals, predictedScores, threshold = 0.5) {
+        return(list(1 - specificity(actuals = actuals, predictedScores = predictedScores, 
+            threshold = threshold), sensitivity(actuals = actuals, 
+            predictedScores = predictedScores, threshold = threshold)))
+    }
+    for (threshold in seq(max(predictedScores, 1, na.rm = T), 
+        (min(predictedScores, 0, na.rm = T) - 0.02), by = -0.02)) {
+        df[rowcount, ] <- getFprTpr(actuals = actuals, predictedScores = predictedScores, 
+            threshold = threshold)
+        rowcount <- rowcount + 1
+    }
+    AREAROC <- AUROC(actuals = actuals, predictedScores = predictedScores)
+    df <- data.frame(df, Threshold = seq(max(predictedScores, 
+        1, na.rm = T), (min(predictedScores, 0, na.rm = T) - 
+        0.02), by = -0.02))
+    df$Threshold.show <- rep(NA, nrow(df))
+    for (rownum in c(2:nrow(df))) {
+        if (df[rownum, 1] != df[rownum - 1, 1] | df[rownum, 2] != 
+            df[rownum - 1, 2]) {
+            df$Threshold.show[rownum] <- df$Threshold[rownum]
+        }
+    }
+    bp <- ggplot(df, aes(One_minus_specificity, sensitivity, 
+        label = Threshold.show))
+    
+        print(bp + geom_ribbon(color = "#F4AA9D", fill = "#F4AA9D", 
+            aes(ymin = 0, ymax = sensitivity)) + labs(title = "ROC Curve", 
+            x = "False Positive Rate", y = "True Positive Rate") + 
+            annotate("text", label = paste("AUROC:", round(AREAROC, 
+                4)), x = 0.55, y = 0.35, colour = "white", size = 8) + 
+            theme(legend.position = "none", plot.title = element_text(size = 20, 
+                colour = "lightpink2"), axis.title.x = element_text(size = 15, 
+                colour = "lightpink2"), axis.title.y = element_text(size = 15, 
+                colour = "lightpink2")) + coord_cartesian(xlim = c(0, 
+            1), ylim = c(0, 1)))
+    }
+   
+
+```
+
+```{r,echo=FALSE,warning=FALSE,message=FALSE}
+ calDefaultPerc = function(x, colInd, data.level){
+   perc_default = list()
+   for (i in 1:length(data.level)) {
+     data_choose = x[which(x[,colInd]==data.level[i]),"Y"] %>% as.data.frame()
+     default_count = table(data_choose)[2] %>% as.numeric()
+     total_count = nrow(data_choose)
+     perc = round(default_count/total_count,4)
+     perc_default[[i]] = data.frame(
+       level = data.level[i],
+       total_count=total_count,
+       default_count=default_count,
+       perc=perc)
+   }
+   x = perc_default[[1]]
+   for (i in 2:length(data.level)) {
+     x = rbind(x,perc_default[[i]])
+   }
+      return(x)
+ }
+
+```
+
+
+```{r echo=FALSE,warning=FALSE,message=FALSE}
+data=read.csv("C:/Users/Lai/Desktop/統學期末/data.csv")
+data = dplyr::select(data,-X)
+train=read.csv("C:/Users/Lai/Desktop/統學期末/train.csv")
+train_balance=read.csv("C:/Users/Lai/Desktop/統學期末/train_balance.csv")
+test=read.csv("C:/Users/Lai/Desktop/統學期末/test.csv")
+
+for (i in c(2:4,6:11)) {
+  train_balance[,i] = as.factor(train_balance[,i])
+}
+
+for (i in c(2:4,6:11)) {
+  train[,i] = as.factor(train[,i])
+}
+
+for (i in c(2:4,6:11)) {
+  test[,i] = as.factor(test[,i])
+}
+
+for (i in c(2:4,6:11)) {
+  data[,i] = as.factor(unlist(data[,i]))
+}
+data[which(data$EDUCATION==0),"EDUCATION"]=4
+data$EDUCATION = factor(data$EDUCATION)
+data$Y = factor(data$Y)
+```
+
+```{r}
+levels(data$SEX) = c("Male","Female")
+levels(data$EDUCATION) = c("Graduate school","University","High School","Others")
+levels(data$MARRIAGE) = c("Married","Single","Divorced")
+# levels(data$PAY_1) = c("no consumption","pay duly","revolving credit",
+#                        "delay 1 month","delay 2 month","delay 3 month",
+#                        "delay 4 month","delay 5 month","delay 6 month",
+#                        "delay 7 month","delay 8 month") 
+levels(data$PAY_2) = c("no consumption","pay duly","revolving credit",
+                       "delay 1 month","delay 2 month","delay 3 month",
+                       "delay 4 month","delay 5 month","delay 6 month",
+                       "delay 7 month","delay 8 month") 
+levels(data$PAY_3) = c("no consumption","pay duly","revolving credit",
+                       "delay 1 month","delay 2 month","delay 3 month",
+                       "delay 4 month","delay 5 month","delay 6 month",
+                       "delay 7 month","delay 8 month") 
+levels(data$PAY_4) = c("no consumption","pay duly","revolving credit",
+                       "delay 1 month","delay 2 month","delay 3 month",
+                       "delay 4 month","delay 5 month","delay 6 month",
+                       "delay 7 month","delay 8 month") 
+levels(data$PAY_5) = c("no consumption","pay duly","revolving credit",
+                       "delay 1 month","delay 2 month","delay 3 month",
+                       "delay 4 month","delay 5 month","delay 6 month",
+                       "delay 7 month","delay 8 month") 
+levels(data$PAY_6) = c("no consumption","pay duly","revolving credit",
+                       "delay 1 month","delay 2 month","delay 3 month",
+                       "delay 4 month","delay 5 month","delay 6 month",
+                       "delay 7 month","delay 8 month") 
+levels(data$Y) = c("nondefault","default")
+```
+
+
+-   類別變數有8個(包括Y)，連續型變數16個。
+```{r}
+summary(data)
+```
+
+
+Default of Credit Card Clients Datasets
+
+各變項代表的意義：  
+
+-   ID: ID of each client
+
+-   LIMIT_BAL: Amount of given credit in NT dollars (includes individual and family/supplementary credit
+
+-   SEX: Gender (1=male, 2=female)
+
+-   EDUCATION: (1=graduate school, 2=university, 3=high school, 4=others, 5=unknown, 6=unknown)
+
+-   MARRIAGE: Marital status (1=married, 2=single, 3=divorced, 0=others)
+
+-   AGE: Age in years
+
+-   PAY_0: Repayment status in September, 2005 (-2=no consumption,-1=pay duly,0:The use Of revolving credit, 1=payment delay for one month, 2=payment delay for two months, … 8=payment delay for eight months, 9=payment delay for nine months and above)
+
+-   PAY_2: Repayment status in August, 2005 (scale same as above)
+
+-   PAY_3: Repayment status in July, 2005 (scale same as above)
+
+-   PAY_4: Repayment status in June, 2005 (scale same as above)
+
+-   PAY_5: Repayment status in May, 2005 (scale same as above)
+
+-   PAY_6: Repayment status in April, 2005 (scale same as above)
+
+-   BILL_AMT1: Amount of bill statement in September, 2005 (NT dollar)
+
+-   BILL_AMT2: Amount of bill statement in August, 2005 (NT dollar)
+
+-   BILL_AMT3: Amount of bill statement in July, 2005 (NT dollar)
+
+-   BILL_AMT4: Amount of bill statement in June, 2005 (NT dollar)
+
+-   BILL_AMT5: Amount of bill statement in May, 2005 (NT dollar)
+
+-   BILL_AMT6: Amount of bill statement in April, 2005 (NT dollar)
+
+-   PAY_AMT1: Amount of previous payment in September, 2005 (NT dollar)
+
+-   PAY_AMT2: Amount of previous payment in August, 2005 (NT dollar)
+
+-   PAY_AMT3: Amount of previous payment in July, 2005 (NT dollar)
+
+-   PAY_AMT4: Amount of previous payment in June, 2005 (NT dollar)
+
+-   PAY_AMT5: Amount of previous payment in May, 2005 (NT dollar)
+
+-   PAY_AMT6: Amount of previous payment in April, 2005 (NT dollar)
+
+-   default.payment.next.month: Default payment (1=yes, 0=no)
+
+
+### 整體Y
+
+-   對於target variable的資料0和1差別很大，可能在之後training data會使用resampling 來平衡。
+```{r}
+data %>%
+  ggplot( aes(x= as.factor(Y))) +
+    geom_histogram( stat="count",binwidth=3, fill=c("#69b3a2","#A3DDD4"), color="#e9ecef", alpha=0.9)  +
+  annotate("text", label = paste("77.88%"), x = 1, y = 13000, colour = "white", size = 5) +annotate("text", label = paste("22.12%"), x = 2, y = 3000, colour = "white", size = 5) 
+```
+
+### 單變量
+#### SEX
+```{r}
+# Bar Graph for gender
+ggplot(data = data, mapping = aes(x = SEX, fill = Y)) +
+  geom_bar() +
+  ggtitle("SEX") +
+  stat_count(aes(label = ..count..), geom = "label")+
+  scale_fill_brewer(palette="Pastel2")
+```
+
+```{r}
+default_count_perc = calDefaultPerc(x = data, colInd = 2, 
+                                    data.level = levels(data$SEX))
+
+# Bar Graph
+ggplot(data = default_count_perc, mapping = aes(x = reorder(level, perc), y = perc,fill=level)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  xlab("SEX") +
+  ylab("Percentage of Defaulters") +
+  ggtitle("SEX level vs default") +
+  geom_label(label = paste(100*default_count_perc$perc, "%"))+
+  scale_fill_brewer(palette="Pastel2")
+```
+
+#### AGE
+```{r}
+ceiling_dec = function(x,level=1)round(x-5*10^(-level-1),level)
+data$AGE_Range = ceiling_dec(data$AGE,-1)
+data$AGE_Range = factor(data$AGE_Range)
+
+ggplot(data = data, mapping = aes(x = AGE_Range, fill = Y)) +
+  geom_bar() +
+  ggtitle("Gender") +
+  stat_count(aes(label = ..count..), geom = "label")+
+  scale_fill_brewer(palette="Pastel2")
+```
+
+```{r}
+default_count_perc = calDefaultPerc(x = data, colInd = 25, 
+                                    data.level = levels(data$AGE_Range))
+
+# Bar Graph
+ggplot(data = default_count_perc, mapping = aes(x = reorder(level, perc), y = perc,fill=level)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  xlab("AGE_Range") +
+  ylab("Percentage of Defaulters") +
+  ggtitle("AGE_Range level vs default") +
+  geom_label(label = paste(100*default_count_perc$perc, "%"))+
+  scale_fill_brewer(palette="Pastel2")
+```
+
+#### EDUCATION
+```{r}
+ggplot(data = data, mapping = aes(x = EDUCATION, fill = Y)) +
+  geom_bar() +
+  ggtitle("EDUCATION") +
+  stat_count(aes(label = ..count..), geom = "label")+
+  scale_fill_brewer(palette="Pastel2")
+```
+
+```{r}
+default_count_perc = calDefaultPerc(x = data, colInd = 3, 
+                                    data.level = levels(data$EDUCATION))
+
+# Bar Graph
+ggplot(data = default_count_perc, mapping = aes(x = reorder(level, perc), y = perc,fill=level)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  xlab("Education") +
+  ylab("Percentage of Defaulters") +
+  ggtitle("Education level vs default") +
+  geom_label(label = paste(100*default_count_perc$perc, "%"))+
+  scale_fill_brewer(palette="Pastel2")
+```
+#### MARRIAGE
+```{r}
+ggplot(data = data, mapping = aes(x = MARRIAGE, fill = Y)) +
+  geom_bar() +
+  ggtitle("MARRIAGE") +
+  stat_count(aes(label = ..count..), geom = "label")+
+  scale_fill_brewer(palette="Pastel2")
+```
+
+```{r}
+default_count_perc = calDefaultPerc(x = data, colInd = 4,
+                                    data.level = levels(as.factor(data$MARRIAGE)))
+
+# Bar Graph
+ggplot(data = default_count_perc, mapping = aes(x = reorder(level, perc), y = perc,fill=level)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  xlab("MARRIAGE") +
+  ylab("Percentage of Defaulters") +
+  ggtitle("MARRIAGE level vs default") +
+  geom_label(label = paste(100*default_count_perc$perc, "%"))+
+  scale_fill_brewer(palette="Pastel2")
+```
+
+
+### PAY_1
+```{r}
+data_1 = data %>%
+  filter(data$PAY_1 %in% c("-2","-1","0","1","2","3")) 
+ggplot(data = data_1, mapping = aes(x = PAY_1, fill = Y)) +
+  geom_bar() +
+  ggtitle("PAY_1") +
+  stat_count(aes(label = ..count..), geom = "label")+
+  scale_fill_brewer(palette="Pastel2")
+remove(data_1)
+```
+
+
+在違約群體中，可見0,2的比例與未違約群體比例，有顯著的改變:  
+
+-   (1)  周轉還款的比例大幅減少
+
+-   (2)  遞延兩個月還款的比例大幅增加
+
+```{r}
+require(plyr)
+
+ess2 = ddply(data,.(Y),function(.){
+      res = prop.table(table(factor(.$PAY_1)))
+      res2 = table(factor(.$PAY_1))
+      data.frame(lab=names(res), y=c(res),yy =c(res2))
+    })
+  ess2 = ess2 %>%
+    filter(lab %in% c(-2,-1,0,1,2,3))
+print(ggplot(ess2,aes(x = Y,y=y,fill = lab))+
+  geom_bar(stat = "identity") +
+  theme(axis.text.y=element_text(face="bold",size=10))+ #調整y軸字型
+  theme(axis.text.x=element_text(face="bold",size=10,angle=360))+ #x軸字型
+  scale_y_continuous(breaks = c(0,0.25,0.5,0.75,1) ,labels =c("0%","25%","50%","75%","100%"))+
+  scale_fill_brewer(palette="Pastel2",name="PAY_1",labels=c("no consumption","pay duly","revolving credit",
+                                                            "delay 1 month","delay 2 month","delay 3 month"))+
+  labs( x= "default",y = "ratio")  +
+  annotate("text", label = paste("20.25%"), x = 1, y = 0.9, colour = "black", size = 4) +
+  annotate("text", label = paste("14.38%"), x = 2, y = 0.92, colour = "black", size = 4) +
+  annotate("text", label = paste("10.25%"), x = 1, y = 0.75, colour = "black", size = 4) +
+  annotate("text", label = paste("5.50%"), x = 2, y = 0.825, colour = "black", size = 4) +
+  annotate("text", label = paste("54.99%"), x = 1, y = 0.4, colour = "black", size = 4) +
+  annotate("text", label = paste("28.45%"), x = 2, y = 0.68, colour = "black", size = 4) +
+    annotate("text", label = paste("10.43%"), x = 1, y = 0.1, colour = "black", size = 4) +
+  annotate("text", label = paste("18.87%"), x = 2, y = 0.4, colour = "black", size = 4) +
+    annotate("text", label = paste("3.52%"), x = 1, y = 0.01, colour = "black", size = 4) +
+  annotate("text", label = paste("27.79%"), x = 2, y = 0.2, colour = "black", size = 4) +
+  annotate("text", label = paste("3.68%"), x = 2, y = 0.01, colour = "black", size = 4)
+    )
+detach("package:plyr", unload=TRUE)
+remove(ess2)
+```
+
+-   由下圖可見，隨著之前帳務紀錄，拖延還款距今越久，越容易違約
+
+```{r}
+#data$PAY_1 %>% table()
+data_1 = data %>%
+  filter(data$PAY_1 %in% c("-2","-1","0","1","2","3")) 
+data_1$PAY_1 = factor(data_1$PAY_1)
+levels(data_1$PAY_1) = c("no consumption","pay duly","revolving credit",
+                         "delay 1 month","delay 2 month","delay 3 month")
+
+
+default_count_perc = calDefaultPerc(x = data_1, colInd = 6,
+                                    data.level = levels(as.factor(data_1$PAY_1)))
+
+# Bar Graph
+ggplot(data = default_count_perc, mapping = aes(x = reorder(level, perc), y = perc,fill=level)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  xlab("PAY_1") +
+  ylab("Percentage of Defaulters") +
+  ggtitle("PAY_1 level vs default") +
+  geom_label(label = paste(100*default_count_perc$perc, "%"))+
+  scale_fill_brewer(palette="Pastel2")
+
+remove(data_1)
+```
+
+
+-   觀察Boxplot，可見通常Default群體的信用貸款額度較低
+
+```{r,echo= FALSE}
+data$LIMIT_BAL = as.numeric(data$LIMIT_BAL)
+ggplot(data, aes(x = Y, y = LIMIT_BAL)) + facet_wrap(~ SEX + MARRIAGE) + 
+  geom_boxplot(aes(fill = Y)) + 
+  labs(x = "Default", y = "Amount of given credit", fill = "Default :") + 
+  ggtitle("Amount of given credit vs. default (by gender and marriage status)") + scale_fill_brewer(palette="Pastel2") +
+  theme(plot.title = element_text(hjust = 0.5), legend.position = "bottom")
+
+```
+
+#### 兩變數
+
+```{r}
+all = data %>% 
+  group_by(SEX,MARRIAGE) %>%
+  summarise(N = length(Y))
+
+Y_1 = data %>%
+  filter(Y=="default") %>%
+  group_by(SEX,MARRIAGE) %>%
+  summarise(N = length(Y))
+
+choose = cbind(level = paste0(level = all$SEX,"/",all$MARRIAGE),
+               perc=Y_1$N/all$N) %>% as.data.frame()
+choose$perc = as.numeric(choose$perc) %>%round(.,5)
+
+# Bar Graph
+ggplot(data = choose, mapping = aes(x = reorder(level, perc), y = perc,fill=level)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  xlab(NULL) +
+  ylab("Percentage of Defaulters") +
+  ggtitle("SEX/Married level vs default") +
+  geom_label(label = paste(100*choose$perc, "%")) + scale_fill_brewer(palette="Pastel2")
+
+remove(all)
+remove(Y_1)
+remove(choose)
+```
+
+
+```{r}
+all = data %>% 
+  group_by(SEX,EDUCATION) %>%
+  summarise(N = length(Y))
+
+Y_1 = data %>%
+  filter(Y=="default") %>%
+  group_by(SEX,EDUCATION) %>%
+  summarise(N = length(Y))
+
+choose = cbind(level = paste0(level = all$SEX,"/",all$EDUCATION),
+               perc=Y_1$N/all$N) %>% as.data.frame()
+choose$perc = as.numeric(choose$perc) %>%round(.,5)
+
+# Bar Graph
+ggplot(data = choose, mapping = aes(x = reorder(level, perc), y = perc,fill=level)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  xlab(NULL) +
+  ylab("Percentage of Defaulters") +
+  ggtitle("SEX/Married level vs default") +
+  geom_label(label = paste(100*choose$perc, "%")) + scale_fill_brewer(palette="Pastel2")
+
+remove(all)
+remove(Y_1)
+remove(choose)
+```
+
+
+```{r}
+all = data %>% 
+  filter(AGE_Range %in%c(20:50)) %>%
+  group_by(SEX,AGE_Range) %>%
+  summarise(N = length(Y))
+
+Y_1 = data %>%
+  filter(AGE_Range %in%c(20:50)) %>%
+  filter(Y=="default") %>%
+  group_by(SEX,AGE_Range) %>%
+  summarise(N = length(Y))
+
+choose = cbind(level = paste0(level = all$SEX,"/",all$AGE_Range),
+               perc=Y_1$N/all$N) %>% as.data.frame()
+choose$perc = as.numeric(choose$perc) %>%round(.,5)
+
+# Bar Graph
+ggplot(data = choose, mapping = aes(x = reorder(level, perc), y = perc,fill=level)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  xlab(NULL) +
+  ylab("Percentage of Defaulters") +
+  ggtitle("SEX/Married level vs default") +
+  geom_label(label = paste(100*choose$perc, "%")) + scale_fill_brewer(palette="Pastel2")
+
+remove(all)
+remove(Y_1)
+remove(choose)
+```

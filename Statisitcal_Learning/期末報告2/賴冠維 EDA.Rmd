@@ -1,0 +1,246 @@
+---
+title: "EDA"
+author: "賴冠維"
+date: "2020/12/29"
+output: html_document
+---
+```{r}
+library(ggplot2)
+require(GGally);
+library(tidyverse)
+library(dplyr)
+library(magrittr)
+library(gridExtra)
+library(corrplot)
+library(xgboost)
+```
+
+
+```{r}
+data = read.csv("C:/Users/Lai/Desktop/data_1/data_new.csv")
+data = data[,-1]
+```
+
+
+```{r}
+a= ggplot(data,aes(x=data$Age,fill=data$Y)) + 
+  geom_density(alpha = 0.4)+
+  ylab(NULL)+
+  ggtitle("Age")+
+  facet_wrap(data$Sex~.,ncol = 4,scales = c("free_x"))
+
+b = ggplot(data,aes(x=data$ALB,fill=data$Y)) + 
+  geom_density(alpha = 0.4)+
+  ylab(NULL)+
+  ggtitle("ALP")+
+  facet_wrap(data$Sex~.,ncol = 4,scales = c("free_x"))
+
+c = ggplot(data,aes(x=data$ALP,fill=data$Y)) + 
+  geom_density(alpha = 0.4)+
+  ylab(NULL)+
+  ggtitle("ALP")+
+  facet_wrap(data$Sex~.,ncol = 4,scales = c("free_x"))
+  
+grid.arrange(a,b,c,nrow=2)
+```
+
+
+```{r}
+a=ggplot(data,aes(x=data$ALT,fill=data$Y)) + 
+  geom_density(alpha = 0.4)+
+  ylab(NULL)+
+  ggtitle("ALT")+
+  facet_wrap(data$Sex~.,ncol = 4,scales = c("free_x"))
+
+b = ggplot(data,aes(x=data$AST,fill=data$Y)) + 
+  geom_density(alpha = 0.4)+
+  ylab(NULL)+
+  ggtitle("AST")+
+  facet_wrap(data$Sex~.,ncol = 4,scales = c("free_x"))
+
+
+c = ggplot(data,aes(x=data$BIL,fill=data$Y)) + 
+  geom_density(alpha = 0.4)+
+  ylab(NULL)+
+  ggtitle("BIL")+
+  facet_wrap(data$Sex~.,ncol = 4,scales = c("free_x"))
+
+
+d = ggplot(data,aes(x=data$CHE,fill=data$Y)) + 
+  geom_density(alpha = 0.4)+
+  ylab(NULL)+
+  ggtitle("CHE")+
+  facet_wrap(data$Sex~.,ncol = 4,scales = c("free_x"))
+
+
+grid.arrange(a,b,c,d,nrow=2)
+```
+
+
+```{r}
+a= ggplot(data,aes(x=data$CHOL,fill=data$Y)) + 
+  geom_density(alpha = 0.4)+
+  ylab(NULL)+
+  ggtitle("CHOL")+
+  facet_wrap(data$Sex~.,ncol = 4,scales = c("free_x"))
+
+
+b = ggplot(data,aes(x=data$CREA,fill=data$Y)) + 
+  geom_density(alpha = 0.4)+
+  ylab(NULL)+
+  ggtitle("CREA")+
+  facet_wrap(data$Sex~.,ncol = 4,scales = c("free_x"))
+
+
+c = ggplot(data,aes(x=data$GGT,fill=data$Y)) + 
+  geom_density(alpha = 0.4)+
+  ylab(NULL)+
+  ggtitle("GGT")+
+  facet_wrap(data$Sex~.,ncol = 4,scales = c("free_x"))
+
+
+d = ggplot(data,aes(x=data$PROT,fill=data$Y)) + 
+  geom_density(alpha = 0.4)+
+  ylab(NULL)+
+  ggtitle("PROT")+
+  facet_wrap(data$Sex~.,ncol = 4,scales = c("free_x"))
+
+
+grid.arrange(a,b,c,d,nrow=2)
+```
+
+
+```{r}
+data %>%
+  select(.,-Sex,-Y) %>%
+  cor(.) %>%
+  corrplot(.,
+           tl.col = "black", 
+           order = "hclust", 
+           method = "shade",
+           addrect = 3, tl.cex = 0.7,
+           title = "Original")
+```
+
+
+```{r}
+data %>%
+  ggpairs(.,aes(col = Y, fill = Y, alpha = 0.6),
+          lower = list(continuous = wrap("points", 
+                                           alpha = 0.6,
+                                           size=0.5)),
+          upper = list(continuous = wrap("cor")),
+          title = "Pairs Plot")
+```
+
+
+
+
+
+```{r}
+train_balanced = read.csv("C:/Users/Lai/Desktop/data_1/train_balanced.csv")
+test = read.csv("C:/Users/Lai/Desktop/data_1/test.csv")
+```
+
+
+
+```{r}
+xgb.params = list(
+  objective = "binary:logistic", 
+  verbose = 0,
+  subsample = 0.3,
+  colsample_bytree = 0.5,
+  seed = 1,
+  max_depth = 5,
+  eta = 0.05, 
+  gamma = 0,
+  set.seed= 12345
+)
+
+train_balanced = select(train_balanced,-Category)
+
+train_balanced$Y = ifelse(train_balanced$Y %in% "Can",1,0)
+cv.model <- xgb.cv(
+  data = data.matrix(subset(train_balanced, select = -Y),set.seed(12345)),
+  label = train_balanced$Y,
+  params = xgb.params,
+  nrounds = 300,
+  nfold = 10,
+  print_every_n = 10,
+  early_stopping_rounds = 30,
+  eval_metric="error"
+)
+```
+
+
+```{r}
+tmp = cv.model$evaluation_log
+
+plot(x=1:nrow(tmp), y= tmp$train_error_mean ,
+     col='red', xlab="nround", ylab="Error",type="l", main="Avg.Performance in CV")
+lines(x=1:nrow(tmp), y= tmp$test_error_mean, col='blue')
+legend("topright", pch=1, col = c("red", "blue"),
+       legend = c("Train", "Validation") )
+
+
+best.nrounds = cv.model$best_iteration
+```
+
+
+```{r}
+xgb.model <- xgboost::xgboost(
+  data.matrix(subset(train_balanced, 
+                     select = -Y)),
+  label = train_balanced$Y,
+  params = xgb.params,
+  nrounds = best.nrounds,
+)
+
+
+test = select(test,-Category)
+test$Y = ifelse(test$Y %in% "Can",1,0)
+
+dtest = data.matrix(subset(test, select = -Y))
+
+# 預測
+xgb_y = predict(xgb.model,dtest,type="response")
+xgb_y = round(xgb_y)
+
+library(caret)
+xtab <- table(xgb_y,test$Y)
+print(confusionMatrix(xtab[2:1,2:1]))
+```
+
+
+```{r}
+library(vip)
+vip(xgb.model, num_features = 10)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

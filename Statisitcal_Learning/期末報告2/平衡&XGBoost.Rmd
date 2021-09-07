@@ -1,0 +1,512 @@
+
+```{r}
+library(xgboost)
+```
+
+
+```{r,echo=FALSE,warning=FALSE,message=FALSE}
+draw_confusion_matrix <- function(cm) {
+  
+  layout(matrix(c(1,1,2)))
+  par(mar=c(2,2,2,2))
+  plot(c(100, 345), c(300, 450), type = "n", xlab="", ylab="", xaxt='n', yaxt='n')
+  title('CONFUSION MATRIX', cex.main=2)
+  
+  # create the matrix 
+  rect(150, 430, 240, 370, col='#AAE0D3')
+  text(195, 435, "Defult", cex=1.2)
+  rect(250, 430, 340, 370, col='#9DCBE4')
+  text(295, 435, "Nondefault", cex=1.2)
+  text(125, 370, 'Predicted', cex=1.3, srt=90, font=2)
+  text(245, 450, 'Actual', cex=1.3, font=2)
+  rect(150, 305, 240, 365, col='#9DCBE4')
+  rect(250, 305, 340, 365, col='#AAE0D3')
+  text(140, 400, "Defult", cex=1.2, srt=90)
+  text(140, 335, "Nondefault", cex=1.2, srt=90)
+  
+  # add in the cm results 
+  res <- as.numeric(cm$table)
+  text(195, 400, res[4], cex=1.6, font=2, col='white')
+  text(195, 335, res[3], cex=1.6, font=2, col='white')
+  text(295, 400, res[2], cex=1.6, font=2, col='white')
+  text(295, 335, res[1], cex=1.6, font=2, col='white')
+  
+  # add in the specifics 
+  plot(c(100, 0), c(100, 0), type = "n", xlab="", ylab="", main = "DETAILS", xaxt='n', yaxt='n')
+  text(10, 85, names(cm$byClass[1]), cex=1.2, font=2)
+  text(10, 70, round(as.numeric(cm$byClass[1]), 3), cex=1.2)
+  text(30, 85, names(cm$byClass[2]), cex=1.2, font=2)
+  text(30, 70, round(as.numeric(cm$byClass[2]), 3), cex=1.2)
+  text(50, 85, names(cm$byClass[5]), cex=1.2, font=2)
+  text(50, 70, round(as.numeric(cm$byClass[5]), 3), cex=1.2)
+  text(70, 85, names(cm$byClass[6]), cex=1.2, font=2)
+  text(70, 70, round(as.numeric(cm$byClass[6]), 3), cex=1.2)
+  text(90, 85, names(cm$byClass[7]), cex=1.2, font=2)
+  text(90, 70, round(as.numeric(cm$byClass[7]), 3), cex=1.2)
+  
+  # add in the accuracy information 
+  text(30, 35, names(cm$overall[1]), cex=1.5, font=2)
+  text(30, 20, round(as.numeric(cm$overall[1]), 3), cex=1.4)
+}
+```
+
+
+#### ROC Curve Function
+```{r,echo=FALSE,warning=FALSE,message=FALSE}
+
+sensitivity=function (actuals, predictedScores, threshold = 0.001) 
+  {
+  actuals = test$Y;predictedScores = xgb.pred;threshold = 0.001
+    predicted_dir <- ifelse(predictedScores < threshold, 0, 1)
+    actual_dir <- actuals
+    no_without_and_predicted_to_not_have_event <- 
+      sum(actual_dir != 1 & predicted_dir != 1, na.rm = T)
+    no_without_event <- sum(actual_dir != 1, na.rm = T)
+    return(no_without_and_predicted_to_not_have_event/no_without_event)
+}
+
+
+specificity=function (actuals, predictedScores, threshold = 0.001) 
+{
+    predicted_dir <- ifelse(predictedScores < threshold, 0, 1)
+    actual_dir <- actuals
+    no_with_and_predicted_to_have_event <- sum(actual_dir == 
+        1 & predicted_dir == 1, na.rm = T)
+    no_with_event <- sum(actual_dir == 1, na.rm = T)
+    return(no_with_and_predicted_to_have_event/no_with_event)
+}
+AUROC=function (actuals, predictedScores) 
+{
+    numrow = length(seq(max(predictedScores, 1, na.rm = T), (min(predictedScores, 
+        0, na.rm = T) - 0.02), by = -0.02))
+    df <- as.data.frame(matrix(numeric(numrow * 2), ncol = 2))
+    names(df) <- c("One_minus_specificity", "sensitivity")
+    rowcount = 1
+    getFprTpr <- function(actuals, predictedScores, threshold = 0.001 ){
+        return(list(1 - specificity(actuals = actuals, predictedScores = predictedScores, 
+            threshold = threshold), sensitivity(actuals = actuals, 
+            predictedScores = predictedScores, threshold = threshold)))
+    }
+    for (threshold in seq(max(predictedScores, 1, na.rm = T), 
+        (min(predictedScores, 0, na.rm = T) - 0.02), by = -0.02)) {
+        df[rowcount, ] <- getFprTpr(actuals = actuals, predictedScores = predictedScores, 
+            threshold = threshold)
+        rowcount <- rowcount + 1
+    }
+    df <- data.frame(df, Threshold = seq(max(predictedScores, 
+        1, na.rm = T), (min(predictedScores, 0, na.rm = T) - 
+        0.02), by = -0.02))
+    auROC <- 0
+    for (point in c(2:nrow(df))) {
+        x1 <- df[point - 1, 1]
+        x2 <- df[point, 1]
+        y1 <- df[point - 1, 2]
+        y2 <- df[point, 2]
+        rect_x <- x2 - x1
+        rect_y <- y1
+        rect_area <- rect_x * rect_y
+        triangle_area <- rect_x * (y2 - y1) * 0.5
+        currArea <- rect_area + triangle_area
+        auROC <- auROC + currArea
+    }
+    totalArea <- (max(df[, 1]) * max(df[, 2]))
+    return(auROC/totalArea)
+}
+
+ROC.plot.rv<-function (actuals, predictedScores) 
+{
+    One_minus_specificity <- Threshold.show <- NULL
+    numrow = length(seq(max(predictedScores, 1, na.rm = T), (min(predictedScores, 
+        0, na.rm = T) - 0.02), by = -0.02))
+    df <- as.data.frame(matrix(numeric(numrow * 2), ncol = 2))
+    names(df) <- c("One_minus_specificity", "sensitivity")
+    rowcount = 1
+    getFprTpr <- function(actuals, predictedScores, threshold = 0.5) {
+        return(list(1 - specificity(actuals = actuals, predictedScores = predictedScores, 
+            threshold = threshold), sensitivity(actuals = actuals, 
+            predictedScores = predictedScores, threshold = threshold)))
+    }
+    for (threshold in seq(max(predictedScores, 1, na.rm = T), 
+        (min(predictedScores, 0, na.rm = T) - 0.02), by = -0.02)) {
+        df[rowcount, ] <- getFprTpr(actuals = actuals, predictedScores = predictedScores, 
+            threshold = threshold)
+        rowcount <- rowcount + 1
+    }
+    AREAROC <- AUROC(actuals = actuals, predictedScores = predictedScores)
+    df <- data.frame(df, Threshold = seq(max(predictedScores, 
+        1, na.rm = T), (min(predictedScores, 0, na.rm = T) - 
+        0.02), by = -0.02))
+    df$Threshold.show <- rep(NA, nrow(df))
+    for (rownum in c(2:nrow(df))) {
+        if (df[rownum, 1] != df[rownum - 1, 1] | df[rownum, 2] != 
+            df[rownum - 1, 2]) {
+            df$Threshold.show[rownum] <- df$Threshold[rownum]
+        }
+    }
+    bp <- ggplot(df, aes(One_minus_specificity, sensitivity, 
+        label = Threshold.show))
+    
+        print(bp + geom_ribbon(color = "#F4AA9D", fill = "#F4AA9D", 
+            aes(ymin = 0, ymax = sensitivity)) + labs(title = "ROC Curve", 
+            x = "False Positive Rate", y = "True Positive Rate") + 
+            annotate("text", label = paste("AUROC:", round(AREAROC, 
+                4)), x = 0.55, y = 0.35, colour = "white", size = 8) + 
+            theme(legend.position = "none", plot.title = element_text(size = 20, 
+                colour = "lightpink2"), axis.title.x = element_text(size = 15, 
+                colour = "lightpink2"), axis.title.y = element_text(size = 15, 
+                colour = "lightpink2")) + coord_cartesian(xlim = c(0, 
+            1), ylim = c(0, 1)))
+    }
+   
+
+```
+
+
+```{r,recho=FALSE,warning=FALSE,message=FALSE}
+require(dplyr)
+require(tidyverse)
+require(kableExtra)
+require(GGally)
+require(car)
+require(RColorBrewer)
+require(hrbrthemes)
+require(nortest)
+require(gridExtra)
+require(grid)
+require(viridis)
+require(glmnet)
+require(leaps)
+require(pROC)
+require(RColorBrewer)
+require(InformationValue)
+require(caret)
+require(MASS)
+require(class) 
+require(magrittr)
+require(corrplot)
+require(magrittr)
+```
+
+
+```{r}
+data = read.csv("C:/Users/Lai/Desktop/統學期末/data.csv")
+data =  dplyr::select(data,-X)
+data[which(data$EDUCATION==0),"EDUCATION"]=4
+data$EDUCATION = factor(data$EDUCATION)
+for (i in c(2:4,6:11,24)) {
+  data[,i] = as.factor(data[,i])
+}
+```
+
+
+
+
+將資料以$(70\%,30\%)$分為${Train,Test}$
+```{r}
+set.seed(123)
+index = sample(1:nrow(data),0.7*nrow(data),replace = F)
+train = data[index,]
+test = data[-index,]
+
+table(train$Y)
+table(test$Y)
+```
+
+為了處理資料不平衡的問題，因此將$Nondefault$資料進行$Undersampling$，並對$Default$資料進行$Resampling$，
+為了盡可能保留資料原來的特徵，我們對$Nondefault/Default$兩群資料分別進行$K-Medoids$進行分群，下面簡介所使用方法：
+
+1.隨機選取K個中心的值(質心為某些樣本點)
+2.計算各個點到中心的距離 
+3.將點的類劃分為離他最近的中心，形成K個cluster 
+4.根據分類好的cluster，在每個cluster內重新計算質心：
+-   4.1 計算cluster內所有樣本點到其中一個樣本點的曼哈頓距離和(絕對誤差)
+-   4.2 選出使cluster絕對誤差最小的樣本點作為質心
+5.重複迭代2-4步直到滿足迭代次數或誤差小於指定的值
+
+其使用算法大多使用PAM(Partitioning Around Medoids)，簡介如下：
+1.首先隨機選擇k個對像當作中心，把每個對象分配給離它最近的中心。
+2.然後隨機地選擇一個同群但非中心對象替換中心對象，以其他非同群資料計算分配後的距離改進量
+如果總的損失減少，則交換中心對象和非中心對象；
+如果總的損失增加，則不進行交換
+3. 重複迭代至收斂或滿足迭代次數
+
+我們測試分2到10群之間，選出使得組內變異最低的分群數，$Default$群裡選到分為7群，並將每群進行重抽樣至2.5倍的資料筆數。
+```{r}
+library(cluster)
+data_1 <- train[train$Y=="1",];dim(data_1)
+k.max <- 10
+asw <- rep(NA,10)
+
+for(i in 2:k.max){
+  asw[i] = clara(data_1,i)$silinfo$avg.width
+}
+
+k.best <- which.min(asw)
+
+plot(2:10, asw[2:10],
+     type="l", pch = 19, frame = FALSE,
+     xlab="Number of clusters K",
+     ylab="Total within-clusters sum of squares")
+
+clustering <- clara(data_1,k.best)
+data_1_cluster <- data.frame(data_1,clustering$cluster)
+
+cluster_p = lapply(1:max(data_1_cluster$clustering.cluster), function(a){
+  data_1_cluster[data_1_cluster$clustering.cluster==a,][,1:ncol(train)]
+})
+
+cluster_p_1 = lapply(1:max(data_1_cluster$clustering.cluster), function(a){
+  set.seed(12345)
+  x = cluster_p[[a]]
+  x[sample(nrow(x),2.5*nrow(x),replace=T),]
+})
+
+only_1 = cluster_p_1[[1]]
+for (i in 2:length(cluster_p_1)) {
+  only_1 = rbind(only_1,cluster_p_1[[i]])
+}
+```
+
+$Nondefault$群裡選到分為10群，並將每群進行抽樣至0.8倍的資料筆數。
+```{r}
+set.seed(12345)
+data_0 <- train[train$Y=="0",];dim(data_0)
+k.max <- 10
+asw <- rep(NA,10)
+for(i in 2:k.max){
+  asw[i] = clara(data_0,i)$silinfo$avg.width
+}
+k.best <- which.min(asw)
+plot(2:10, asw[2:10],
+     type="l", pch = 19, frame = FALSE,
+     xlab="Number of clusters K",
+     ylab="Total within-clusters sum of squares")
+
+clustering <- clara(data_0,k.best)
+data_0_cluster <- data.frame(data_0,clustering$cluster)
+
+cluster_p = lapply(1:max(data_0_cluster$clustering.cluster), function(a){
+  data_0_cluster[data_0_cluster$clustering.cluster==a,][,1:ncol(train)]
+})
+
+cluster_p_1 = lapply(1:max(data_0_cluster$clustering.cluster), function(a){
+  set.seed(12345)
+  x = cluster_p[[a]]
+  x[sample(nrow(x),0.8*nrow(x),replace=F),]
+})
+
+only_0 = cluster_p_1[[1]]
+for (i in 2:length(cluster_p_1)) {
+  only_0 = rbind(only_0,cluster_p_1[[i]])
+}
+```
+
+
+```{r}
+ # data=read.csv("C:/Users/Lai/Desktop/統學期末/data.csv")
+ # data = dplyr::select(data,-X)
+ # train=read.csv("C:/Users/Lai/Desktop/train.csv")
+ # train_balance=read.csv("C:/Users/Lai/Desktop/train_balance.csv")
+ # test=read.csv("C:/Users/Lai/Desktop/test.csv")
+```
+
+
+```{r}
+for (i in c(2:4,6:11)) {
+  train_balance[,i] = as.factor(train_balance[,i])
+}
+
+for (i in c(2:4,6:11)) {
+  train[,i] = as.factor(train[,i])
+}
+
+for (i in c(2:4,6:11)) {
+  test[,i] = as.factor(test[,i])
+}
+
+for (i in c(2:4,6:11)) {
+  data[,i] = as.factor(unlist(data[,i]))
+}
+
+```
+
+### XGBoost
+Y為Binary資料，因此設定$Objective\ Function$為$"binary:logistic"$，下面簡介其損失函數：  
+假設其分配為$Bernouli$如下，其$Logistic$的損失函數寫作：
+$$\prod_{1}^n{\pi(x_i)^{yi}[1-\pi(x_i)]^{1-yi}} , \pi(x) = \frac{exp(\beta_iX_i)}{1+exp(\beta_iX_i)}$$
+
+現在採用$Regression Tree$模型的$Boosting$，其$h_m(x_i)$代表經過m棵樹迭代後的估計值，
+同$Logistic$裡的$\Sigma^n_{i=1}\beta_iXi$
+
+$$\hat{f}(x_i) = \Sigma^M_{m=1}h_m(x_i) = \Sigma^n_{i=1}\beta_iXi$$
+將其帶入上述損失函數後，可得下式：
+$$L(y_i,f(x)) = y\ln(1+e^{-f(x)})+(1-y)\ln(1+e^{f(x)})$$
+在$XGBoost$模型中，亦可調整其他參數，以下說明本模型之設定：
+eta：模型的學習速率
+max_depth：$Regression Tree$之最大層數
+subsample：$Row$抽樣之比例(重複抽樣)
+colsample_bytree：$Column$ 抽樣之比例(重複抽樣)
+eval_metric：檢測模型表現所用的評價指標
+我們設定{subsample = 0.4,colsample_bytree = 0.4,max_depth = 4,eta = 0.05, eval_metric = "auc"}，
+並且使用$Cross Validation$的方法選出能使模型表現最佳的樹棵數，
+本模型採用$K-Fold \ Cross \ Validation$方法，設定$K=5$，測試在ntree 在1-1500之間表現，結果如下：
+
+```{r}
+xgb.params = list(
+  objective = "binary:logistic", 
+  subsample = 0.6,
+  booster="gbtree",
+  colsample_bytree = 0.6,
+  seed = 66666,
+  max_depth = 6,
+  eta = 0.1, 
+  eval_metric = "auc",
+  gamma = 0
+)
+
+
+cv.model <- xgb.cv(
+  data = data.matrix(subset(train_balance, select = -Y)),
+  label = train_balance$Y,
+  params = xgb.params,
+  nrounds = 100,
+  nfold = 5,
+  print_every_n = 10,
+  early_stopping_rounds = 30
+  )
+```
+
+
+```{r}
+tmp = cv.model$evaluation_log
+
+plot(x=1:nrow(tmp), y= tmp$train_auc_mean,
+     col='red', xlab="nround", ylab="AUC",type="l", main="Avg.Performance in CV")
+lines(x=1:nrow(tmp), y= tmp$test_auc_mean, col='blue')
+
+legend("topright", pch=1, col = c("red", "blue"),
+       legend = c("Train", "Validation") )
+
+
+best.nrounds = cv.model$best_iteration
+```
+
+
+
+```{r}
+# 建構模型
+xgb.model <- xgboost::xgboost(
+  data.matrix(subset(train_balance, 
+                     select = -Y)),
+  label = train_balance$Y,
+  params = xgb.params,
+  nrounds = best.nrounds,
+)
+```
+
+
+```{r}
+dtest = data.matrix(subset(test, select = -Y))
+xgb.pred = predict(xgb.model,dtest,reshape=T,type="class")
+#ROC.plot.rv(actuals =test$Y,predictedScores = xgb.pred)
+
+library(vip)
+
+vip(xgb.model, num_features = 20)
+```
+
+```{r}
+dtest = data.matrix(subset(test, select = -Y))
+xgb.pred = predict(xgb.model,dtest,type="class")
+
+ROC.plot.rv(actuals = test$Y,predictedScores = xgb.pred)
+
+
+xgb.pred = round(xgb.pred)
+xtab <- table(xgb.pred,test$Y)
+xtab
+draw_confusion_matrix(cm = confusionMatrix(xtab,positive="1"))
+print(confusionMatrix(xtab,positive = "1"))
+
+```
+
+
+```{r}
+cv.model <- xgb.cv(
+  data = data.matrix(subset(train, select = -Y)),
+  label = train$Y,
+  params = xgb.params,
+  nrounds = 200,
+  nfold = 5,
+  print_every_n = 10,
+  early_stopping_rounds = 30
+  )
+```
+
+
+```{r}
+tmp = cv.model$evaluation_log
+
+plot(x=1:nrow(tmp), y= tmp$train_auc_mean,
+     col='red', xlab="nround", ylab="AUC",type="l", main="Avg.Performance in CV")
+lines(x=1:nrow(tmp), y= tmp$test_auc_mean, col='blue')
+
+legend("topright", pch=1, col = c("red", "blue"),
+       legend = c("Train", "Validation") )
+
+
+best.nrounds = cv.model$best_iteration
+```
+
+```{r}
+xgb.model <- xgboost::xgboost(
+  data.matrix(subset(train, 
+                     select = -Y)),
+  label = train$Y,
+  params = xgb.params,
+  nrounds = best.nrounds,
+)
+```
+
+```{r}
+dtest = data.matrix(subset(test, select = -Y))
+xgb.pred = predict(xgb.model,dtest,type="response")
+xgb.pred %>% head()
+ROC.plot.rv(actuals = test$Y,predictedScores = xgb.pred)
+xgb.pred = round(xgb.pred)
+xgb.pred[which(xgb.pred>1)]=1
+xtab <- table(xgb.pred,test$Y)
+cm = confusionMatrix(xtab,positive = "1")
+```
+
+```{r}
+output = cbind(xgb.pred,test$Y) %>% data.frame()
+xtab = xtab %>% matrix()
+
+# write.csv(output,"C:/Users/Lai/Desktop/統學期末/please.csv")
+# write.csv(xtab,"C:/Users/Lai/Desktop/統學期末/please2.csv")
+
+x = cbind(xgb.pred,test$Y)
+
+
+
+library(qs)
+# qsave(cm,"C:/Users/Lai/Desktop/統學期末/please2")
+# qsave(x,"C:/Users/Lai/Desktop/統學期末/please")
+```
+
+```{r}
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
