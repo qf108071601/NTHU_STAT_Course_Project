@@ -1,0 +1,44 @@
+/* Whole document: */
+body{
+  font-family: 微軟正黑體;
+  font-size: 16pt;
+  line-height: 34px;
+  color: #808080;
+}
+
+/* Headers */
+h1{
+  font-size: 20pt;
+line-height: 14px;
+  color: #5E86C1;
+}
+
+h2{
+  font-size: 18pt;
+line-height: 14px;
+  color: #5E86C1;
+}
+
+h3{
+  font-size: 16pt;
+line-height: 14px;
+  color: #5E86C1;
+}
+
+h4{
+  font-size: 14pt;
+line-height: 14px;
+  color: #5E86C1;
+}
+
+h5{
+  font-size: 16pt;
+line-height: 14px;
+  color: #5E86C1;
+}
+
+h6{
+  font-size: 16pt;
+line-height: 14px;
+  color: #5E86C1;
+}
