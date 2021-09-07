@@ -1,0 +1,317 @@
+---
+title: "HW2"
+author: "賴冠維"
+date: "2020/10/12"
+output:
+  word_document: default
+  html_document: default
+---
+## 清理資料、資料型態轉換
+
+```{r,echo=FALSE}
+library(dplyr)
+library(magrittr)
+library(ggfortify)
+library(ISLR)
+```
+
+
+```{r,echo=FALSE}
+Auto = read.table("C:/Users/Lai/Desktop/統計學習/Auto.data",header = T)
+```
+
+
+```{r,echo=FALSE}
+for (i in 1:7) {
+  Auto[,i] = as.numeric(Auto[,i])
+}
+for (i in 8:9) {
+  Auto[,i] = as.factor(Auto[,i])
+}
+Auto = Auto %>% na.omit()
+```
+
+## 資料介紹
+
++ mpg:miles per gallon
+
++ cylinders:Number of cylinders between 4 and 8
+
++ displacement:Engine displacement (cu. inches)
+
++ horsepower:Engine horsepower
+
++ weight:Vehicle weight (lbs.)
+
++ acceleration:Time to accelerate from 0 to 60 mph (sec.)
+
++ year:Model year (modulo 100)
+
++ origin:Origin of car (1. American, 2. European, 3. Japanese)
+
++ name:Vehicle name
+
+```{r,echo=FALSE}
+str(Auto)
+```
+
+## (8)
+### (a)
++ (1) 可以從個別t檢定看出，截距項及mpg皆以極趨近0的p-value(***) 拒絕虛無假設，代表此變數(horsepower)對mpg之間有關係。
+
++ (2) 關係的強度我們可以從 Multicple R-squared : 0.6059 , Adjusted R-squared : 0.6049 這兩個值看出此線性回歸模型對mpg解釋的程度,此模型高達0.6代表解釋mpg程度尚佳。
+
++ (3) 我們可以從horsepower項的 Estimate的值為-0.157845看出，mpg與horsepower兩者為負相關，符合我們的想像，馬力大的車通常較耗油。
+
+```{r,echo=FALSE}
+rg = lm(mpg~horsepower,data = Auto)
+summary(rg)
+```
+
++ (4) 使用predict()預設之信賴區間即為95%的信賴區間，其預測值為24.46708，而預測區間與信賴區間相比多了一個標準差，因此Intervals的區間更寬<br>
+因為預測區間為估計一個"個別值"，而信賴區間為估計一個"平均值"，因此有此結果。
+```{r,echo=FALSE}
+predict(rg,data.frame(horsepower = 98),interval = "confidence")
+predict(rg,data.frame(horsepower = 98),interval = "prediction")
+```
+
+
+### (b)
++ 兩者呈現負相關，與我們的直覺相同，馬力大的車油耗較差。
+```{r,echo=FALSE}
+attach(Auto)
+plot(horsepower,mpg)
+abline(rg,col = 2, lwd = 2,lty = 2)
+
+```
+
+
+### (c)
++ 由下圖可看見以下幾個結果：
++ (1) 殘差不隨機，有趨勢，代表解釋變數並未能對mpg有效解釋。
++ (2) Normal Q-Q圖可看出，殘差偏離斜直線代表殘差為不對襯分布，與我們通常對殘差的常態假設不符。
++ (3) 而從Leverage圖可看出，哪些觀測值偏離回歸線甚遠，可能造成回歸線預測偏離。
+```{r,echo=FALSE}
+autoplot(rg)
+```
+
+## (9)
+### (a)
++ 從散佈圖可看出，displacement、horsepower、weight對mpg呈現負相關，year對mpg為正相關，其代表：
++ 引擎排氣量(displacement)越高，油耗越差。
++ 馬力(horsepower)越高，油耗越差。
++ 汽車重量(weight)越重，油耗越差。
+```{r,echo=FALSE}
+x = Auto %>% select(mpg,displacement,horsepower,weight)
+pairs(x)
+```
+
+
++ 可以看出來當汽缸(cylinders)變多，mpg顯著下降，與我們的想法相符，汽缸數較多的車代表排氣量較高，因此油耗較高，而地區(origin)並未有太顯著的差別。
+```{r,echo=FALSE}
+x = Auto %>% select(mpg,cylinders,origin)
+pairs(x)
+```
+
+
+### (b)
++ 從此相關係數的表可見與上述散佈圖的結果相同。
+```{r,echo=FALSE}
+cor(Auto[1:7])
+```
+
+
+### (c)
++ 係數中displacement、weight、year、origin為顯著通過個別t檢定，而此處可見origin為顯著，在上述的分析中並未看到此變數對mpg有顯著的解釋能力，但在此卻顯著，也代表origin可能提供別的邊際貢獻。                    
+```{r,echo=FALSE}
+mrg = lm(mpg~.-name,data = Auto)
+summary(mrg)
+
+```
+
+### (d)
++ 由下圖可看見以下幾個結果：
++ (1) 殘差不隨機，有趨勢，代表解釋變數並未能對mpg有效解釋。
++ (2) Normal Q-Q圖可看出，殘差偏離斜直線代表殘差為不對襯分布，與我們通常對殘差的常態假設不符。
++ (3) 而從Leverage圖可看出，哪些觀測值偏離回歸線甚遠，可能造成回歸線預測偏離，標記出第327,394,14筆資料可能為不正常的離群值，而明顯可見第14筆觀測值存在有高度的Leverage Effects。
+```{r,echo=FALSE}
+par(mfrow=c(2,2))
+plot(mrg)
+```
+
++ 由下面結果可見，此車種的汽缸數(cylinders)、引擎排量(displacement)、馬力(horsepower)明顯高於平均，但重量(weight)卻與平均差不多，而油耗(mpg)卻明顯差很多 ，可能是因為weight的部分其他觀測值有明顯的差異。
+```{r,echo=FALSE}
+Auto[14,"name"]
+paste("Average mpg:",mean(Auto$mpg),"Buick Estate Wagon:",Auto[14,"mpg"])
+paste("Average cylinders:",mean(Auto$cylinders),"Buick Estate Wagon:",Auto[14,"cylinders"])
+paste("Average displacement:",mean(Auto$displacement),"Buick Estate Wagon:",Auto[14,"displacement"])
+paste("Average horsepower:",mean(Auto$horsepower),"Buick Estate Wagon:",Auto[14,"horsepower"])
+paste("Average weight:",mean(Auto$weight),"Buick Estate Wagon:",Auto[14,"weight"])
+paste("Average year:",mean(Auto$year),"Buick Estate Wagon:",Auto[14,"year"])
+
+```
+
+
+### (e)
++ 從上述散佈圖可發現weight、cylinders及weight、displacement之間有高度相關，可能存在有共線性的問題，這時候加入交互項來解決此問題，從表1、表2皆可看到交互項通過個別t檢定，拒絕虛無假設，對mpg有顯著的解釋能力。
+```{r,echo=FALSE}
+mrg1 = lm(mpg~weight*cylinders,data = Auto)
+summary(mrg1)
+
+mrg2 = lm(mpg~weight*displacement,data = Auto)
+summary(mrg2)
+
+```
+
++ ':'代表單獨放交互項，此處放displacement與cylinders的交互項，結果如下表，顯著拒絕虛無假設，對mpg有解釋能力。
+```{r,echo=FALSE}
+mrg3 = lm(mpg~displacement:cylinders,data = Auto)
+summary(mrg3)
+
+```
+
+
+### (f)
++ 上述說到殘差具有趨勢，可由加入平方項、根號項、log項等方式解決此問題，
+表1為mpg對所有變數並加入平方項後的結果，再剔除掉不顯著的變數後得到表2。
+
++ 由診斷圖可見，殘差的趨勢、Leverage的趨勢皆被消除，代表加入此平方項有顯著的效果。
+```{r,echo=FALSE}
+mrg4 = lm(mpg~.- name + I(weight^2),data = Auto)
+
+mrg5 = lm(mpg~.- name 
+          - acceleration 
+          - cylinders 
+          + I(weight^2),data = Auto)
+
+summary(mrg4)
+summary(mrg5)
+
+par(mfrow=c(2,2))
+plot(mrg4)
+plot(mrg5)
+```
+
+
+## 10
+### (a)
+Carseats為關於兒童車用座椅的資料，400筆觀測值代表不同店家，共有11個變數，變數敘述如下：<br>
+
++ Sales:Unit sales (in thousands) at each location
+
++ CompPrice:Price charged by competitor at each location
+
++ Income:Community income level (in thousands of dollars)
+
++ Advertising:Local advertising budget for company at each location (in thousands of dollars)
+
++ Population:Population size in region (in thousands)
+
++ Price:Price company charges for car seats at each site
+
++ ShelveLoc:A factor with levels Bad, Good and Medium indicating the quality of the shelving location for the car seats at each site
+
++ Age:Average age of the local population
+
++ Education:Education level at each location
+
++ Urban:A factor with levels No and Yes to indicate whether the store is in an urban or rural location
+
++ US:A factor with levels No and Yes to indicate whether the store is in the US or not
+
++ Urban 為binary的變數，代表店家是否在都會區，未通過個別t檢定。
++ 整體模型的R squared僅0.2393，代表此模型表現欠佳，尚有許多變異未解釋，有改進的空間。
+```{r,echo=FALSE}
+library(ISLR)
+data("Carseats")
+
+fit = lm(Sales~Price+Urban+US,data = Carseats )
+summary(fit)
+```
+
+### (b)
++ 要比較各變數之間的貢獻，則需要先將數值型變數進行標準化，才可擺脫單位造成的影響。
++ 標準化後，下表即為回歸模型的式子以及每個變數的所估計的參數，可注意到：
+- Price 參數為負，代表Price與Sales之間為負相關，代表當產品的定價越高對於銷售會產生負面的效果。
+- Urban 變數為Binary變數，由於上述提到並未通過個別t檢定，其P-value顯著的不拒絕虛無假設，故在此討論其參數可能有誤。
+- US 變數為Binary變數，代表商店是否位於美國，可見當為Yes時其參數為正，並且其值遠大於Price，可能代表在美國的店家的銷售明顯高過其他地區所造成。
+```{r,echo=FALSE}
+index = sapply(1:11,function(x){
+  is.numeric(Carseats[,x])
+  }
+)
+Carseats[,index] %<>% scale()
+
+
+print(fit)
+```
+
+
+### (c)
+模型中有兩個Binary變數，依這兩個變數的結果共有以下四種情況，如下：
+
++ 當Urban、US皆為Yes
+$$(Status1):Sales = 13.04347 -0.05446*Price - 0.02192*Urban_{Yes} + 1.20057*US_{Yes}  $$
+
++ Urban 為Yes，US為NO
+$$(Status1):  Sales = 13.04347-0.05446*Price - 0.02192*Urban_{Yes} $$
++ Urban為NO，US為YES
+$$(Status1):  Sales =13.04347 -0.05446*Price + 1.20057*US_{Yes}  $$
++ Urban、US皆為NO
+$$(Status1):  Sales = 13.04347-0.05446*Price $$
+
+
+
+### (d)
++ 回歸放入全部的變數，發現Population、Education、Urban、US皆未通過個別t檢定，其餘變數皆通過個別t檢定，拒絕虛無假設。
+```{r,echo=FALSE}
+fit1 = lm(Sales~.,data = Carseats)
+summary(fit1)
+```
+
++ 接著看Sales對這四個變數的plot，可以發現Sales在這四個變數的Outcome間皆無明顯差異，可解讀其個別對Sales並無解釋能力，故未通過個別t檢定。
+```{r,echo=FALSE}
+attach(Carseats)
+
+par(mfrow=c(2,2))
+plot(Population,Sales)
+plot(as.factor(Education),Sales)
+plot(Urban,Sales)
+plot(US,Sales)
+```
+
+## (e)
++ 發現去掉上述4個個別t檢定未通過的變數後，R Square並未有明顯的下降，而自由度卻有大幅的上升。
++ 此舉動代表降低了估計參數的同時並未犧牲掉解釋力，故此篩選變數是一個好的選擇。
+```{r,echo=FALSE}
+fit1 = lm(Sales~.-Population-Education-Urban-US,data = Carseats)
+summary(fit1)
+```
+
+## (f)
++ 我們可由兩模型的R Square 及 fit.values對實際Sales的plot來看，明顯可以發現(e)小題模型的解釋力比較好，從圖也可以發現預測的誤差較小。
+```{r,echo=FALSE}
+summary(fit)
+summary(fit1)
+
+par(mfrow=c(1,2))
+plot(fit$fitted.values,fit$model$Sales,col=1:2)
+plot(fit1$fitted.values,fit1$model$Sales,col=1:2)
+```
+
+
+## (g)
++ 可以看到(e)小題的模型的信賴區間都未包括0，皆顯著
+```{r,echo=FALSE}
+confint(fit1)
+```
+
+## (h)
++ (e)小題的模型所畫出的Residuals vs Leverage Plot中,存在有幾個殘差較大的觀測值，但其Cook Distance並未超過0.5，皆包含在裡面，因此認為此模型中並未有存在High Leverage的觀測值。
++ 而第208,298筆資料其Residuals接近+-3，而由Scale-Location  Plot 圖中也可發現，
+標準化後的Residuals也超過1.5，因此可能為Outliers，但仍需要再加以分析才決定是否要加以刪除。
+```{r,echo=FALSE}
+par(mfrow=c(2,2))
+plot(fit1)
+```
+

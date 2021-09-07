@@ -1,0 +1,392 @@
+---
+title: "HW4"
+author: "賴冠維"
+date: "2020/11/16"
+output:
+  word_document: default
+  html_document: default
+---
+
+#### Question 10 
+```{r,echo=F}
+require(ISLR); require(tidyverse); require(ggthemes);
+require(GGally);
+```
+
+#### (a)
+Weekly為S&P500指數從1990到2010的周報酬率資料， 資料組成有:  
+1. $Year$ (年份)  
+2. $Lag 1-5$ (滯後1-5期的報酬率資料)
+3. $Volume$ (成交量)
+4. $Today$ (當日報酬率)
+5. $Direction$ (當天是漲/跌)
+
+```{r,echo=F}
+set.seed(1)
+data('Weekly')
+
+str(Weekly)
+```
+
+列出不同Lag期之下對應本日漲跌的幅度，單純從數字上看不太出有什麼關係
+```{r,echo=F}
+Weekly %>% 
+  gather(Variable, value, starts_with('Lag'), Today) %>%
+  group_by(Variable, Direction) %>%
+  summarise(Q25 = quantile(value, 0.25), 
+            median = median(value),  
+            mean = mean(value),
+            Q75 = quantile(value, 0.75))
+```
+
+
+畫出Box Plot之後可以觀察到Lag1、Lag2、Lag5之下，Down跟Up之間盒狀圖有顯著的差異
+```{r,echo=F}
+Weekly %>%
+  gather(value_type, value, starts_with('Lag')) %>%
+  ggplot(aes(value_type, value, fill = Direction)) +
+  geom_boxplot(notch = F) + 
+  labs(x = '', y = '') +
+  ylim(c(-6, 6)) + 
+  geom_hline(yintercept = 0, linetype = 2)
+```
+
+若是對Year畫出盒狀圖，可以看到S&P500報酬的波動有群聚的現象，  1992-1995為波動較小的時期，而1996到2002波動較大，對應到當時正面臨網際網路泡沫的衝擊。
+```{r,echo=F}
+Weekly %>%
+  gather(value_type, value, starts_with('Lag')) %>%
+  ggplot(aes(as.factor(Year), value, fill = Direction)) +
+  geom_boxplot(notch = F) + 
+  labs(x = '', y = '') +
+  ylim(c(-6,6)) + 
+  geom_hline(yintercept = 0, linetype = 2)
+```
+
+分別對Lag1、Lag2進行Two Sample t-test，    在90%信心水準下，拒絕虛無假設，代表不同Direction之下的Lag1、Lag2間存在差異。
+```{r,echo=F}
+t.test(Lag1 ~ Direction, data = Weekly)
+t.test(Lag2 ~ Direction, data = Weekly)
+```
+
+#### (b)
+去掉Year,Today變數後，因Outcome有兩個結果，family使用binomial，為Logistic Regression。  由配飾結果可見，僅Lag2與截距項顯著拒絕虛無假設，通過個別t檢定，故在此認為僅Lag2為較有解釋力之變數。
+
+```{r,echo=F}
+Log_ful <- glm(Direction ~ . - Year - Today, data = Weekly, family = 'binomial')
+summary(Log_ful)
+```
+#### (c)
+由下表可見準確率(Accuracy)僅56.11%，下表視$Up$為$Positive$的情況下，Sensitivity 雖高達92%，  但Specificity僅11.16%，代表配飾的模型將絕大部分的資料都判斷為$Up$，並不能有效區別$Up$及$Down$。
+
+```{r,echo=F}
+pred <- predict(Log_ful, type = 'response')
+pred_values <- ifelse(pred >= 0.5, 'Up', 'Down')
+
+library(caret)
+xtab <- table(pred_values,Weekly$Direction)
+print(confusionMatrix(xtab[2:1,2:1]))
+```
+
+此處試驗全部都猜$Up$準確率也有55.56%，代表上述模型配飾結果很差，跟全部猜$Up$差不多。
+```{r,echo=F}
+mean(Weekly$Direction == 'Up')
+```
+
+#### (d)
+因為此資料為時間序列的資料，因此在拆分Train、Test時不能像一般Cross-Section的資料隨機抽樣，  因此按照資料在2008年之前/後分為Train、Test，並且只放入通過個別t檢定的變數:$Lag\ 2$。  
+以Train 資料配飾的Logistic Regression在配飾Test資料所得到的Confusion Matrix來看，  看似準確率有提升至62.5%，但若是全部猜$Up$之下也有58%的準確度，該模型依舊無顯著的預測能力。
+```{r,echo=F}
+train <- Weekly[Weekly$Year <= 2008,]
+test <- Weekly[Weekly$Year > 2008,]
+
+
+lag2_logreg <- glm(Direction ~ Lag2, data = train, family = 'binomial')
+pred <- predict(lag2_logreg, newdata = test, type = 'response')
+pred_values <- ifelse(pred >= 0.5, 'Up', 'Down')
+
+xtab <- table(pred_values,test$Direction)
+print(confusionMatrix(xtab[2:1,2:1]))
+
+mean(test$Direction == 'Up')
+```
+
+#### (e)
+ 使用LDA方法配飾預測模型，同樣僅放入$Lag\ 2$，發現準確率與Logisitc相同,並無提升。
+```{r,echo=F}
+require(MASS)
+
+lda_model <- lda(Direction ~ Lag2, data = train)
+
+pred <- predict(lda_model, newdata = test)
+pred_values <- pred$class
+
+xtab <- table(pred_values,test$Direction)
+print(confusionMatrix(xtab[2:1,2:1]))
+```
+
+#### (f)
+使用QDA來預測之Confusion Matrix，可得模型判所有的Test資料皆為$Up$，無預測能力。
+```{r,echo=F}
+qda_model <- qda(Direction ~ Lag2, data = train)
+
+pred <- predict(qda_model, newdata = test)
+pred_values <- pred$class
+
+xtab <- table(pred_values,test$Direction)
+print(confusionMatrix(xtab[2:1,2:1]))
+```
+
+#### (g)
+使用KNN演算法預測Test資料，我們需要先給定center有幾個，若我們設定center=1，以Train進行配飾，並對Test資料預測所建立的Confusion Matrix，準確率僅50.82%，比全部猜$Up$還要更低。
+```{r,echo=F}
+require(class)
+
+knn_pred <- knn(train = data.frame(train$Lag2), 
+                test = data.frame(test$Lag2), 
+                cl = train$Direction, k = 1)
+
+xtab <- table(knn_pred,test$Direction)
+print(confusionMatrix(xtab[2:1,2:1]))
+```
+
+使用Naive Bayes來預測之Confusion Matrix，可得模型判所有的Test資料皆為$Up$，無預測能力。
+```{r,echo=F}
+require(e1071)
+NB = naiveBayes(Direction ~Lag2, data = train)
+
+pred <- predict(NB, newdata = test)
+
+xtab <- table(pred,test$Direction)
+print(confusionMatrix(xtab[2:1,2:1]))
+
+```
+
+#### (h)
+若是僅看Accuracy之下，可能會選擇Logistic Regression或是LDA，但是我們可觀察到KNN在Center=1時，模型預測Test資料為$Down$大量出現，也讓 
+Specificity 明顯提升，故我們可試試看藉由調整Center，優化KNN的結果。  
+  
+#### (i)
+將Lag1、I(Volume^2)加進自變數進行Logistic Regression，可發現Accuracy略下降，但是Specificity 大幅提升，因此認為是較佳的模型。
+```{r,echo=F}
+lag2_logreg <- glm(Direction~Lag1+Lag2+I(Volume^2), data = train,family = 'binomial')
+
+pred <- predict(lag2_logreg, newdata = test, type = 'response')
+pred_values <- ifelse(pred >= 0.5, 'Up', 'Down')
+
+xtab <- table(pred_values,test$Direction)
+print(confusionMatrix(xtab[2:1,2:1]))
+```
+
+接著以相同的自變數帶入LDA模型，兩者結果相近。
+```{r,echo=F}
+require(MASS)
+
+lda_model <- lda(Direction ~Lag1+Lag2+I(Volume^2), data = train)
+
+pred <- predict(lda_model, newdata = test)
+pred_values <- pred$class
+
+xtab <- table(pred_values,test$Direction)
+print(confusionMatrix(xtab[2:1,2:1]))
+```
+
+藉由測試Center:1-14之下的模型表現，選出Accuracy最高者，可發現在k=13之下有最高的Accuracy。
+```{r,echo=F}
+acc <- list()
+
+set.seed(12345)
+acc = sapply(1:16, function(x){
+  knn_pred <- knn(train = data.frame(train$Lag2),
+                  test = data.frame(test$Lag2), 
+                  cl = train$Direction, k = x)
+  acc[as.character(x)] = mean(knn_pred == test$Direction)
+})
+
+unlist(acc)
+```
+
+發現KNN在k=13之下，Accuracy比上面兩模型表現更佳。
+```{r,echo=F}
+
+knn_pred <- knn(train = data.frame(train$Lag2), 
+                test = data.frame(test$Lag2), 
+                cl = train$Direction, k = 13)
+
+xtab <- table(knn_pred,test$Direction)
+print(confusionMatrix(xtab[2:1,2:1]))
+```
+
+
+### Question 11
+  
+mpg資料變數介紹：
+
++ mpg:miles per gallon
+
++ cylinders:Number of cylinders between 4 and 8
+
++ displacement:Engine displacement (cu. inches)
+
++ horsepower:Engine horsepower
+
++ weight:Vehicle weight (lbs.)
+
++ acceleration:Time to accelerate from 0 to 60 mph (sec.)
+
++ year:Model year (modulo 100)
+
++ origin:Origin of car (1. American, 2. European, 3. Japanese)
+
++ name:Vehicle name
+  
+#### (a)
+建立mpg01，將mpg大於中位數令為1，否則為0，並且將origin的Outcome改為
+$[American, European, Asian]$
+```{r,echo=F}
+data(Auto)
+Auto <- Auto %>%
+    mutate(mpg01 = factor(ifelse(mpg > median(mpg), 1, 0)),
+           origin = factor(origin,
+                           levels = c(1,2,3),
+                           labels = c('American', 'European', 'Asian')))
+```
+
+#### (b)
+ 從下圖觀察，發現有以下這些變數對mpg01有較顯著的變化，可能代表著較有解釋力，變數如下：  
+* cylinders
+* displacement
+* horsepower
+* weight
+* year
+  
+  
+```{r,echo=F}
+Auto %>%
+    dplyr::select(-name, -mpg) %>%
+ggpairs(aes(col = mpg01, fill = mpg01, alpha = 0.6),
+        upper = list(combo = 'box'),
+        diag = list(discrete = wrap('barDiag', position = 'fill')),
+        lower = list(combo = 'dot_no_facet')) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+個別將這些變數對mpg1做Box Plot，更可以觀察到這些變數對mpg01有顯著的不一樣，可能代表著具有較佳的解釋力。
+```{r,echo=F}
+Auto %>%
+    dplyr::select(-name, -mpg, - origin, -cylinders) %>%
+    gather(Variable, value, -mpg01) %>%
+    mutate(Variable = str_to_title(Variable)) %>%
+    ggplot(aes(mpg01, value, fill = mpg01)) +
+    geom_boxplot(alpha = 0.6) +
+    facet_wrap(~ Variable, scales = 'free', ncol = 1, switch = 'x') +
+    coord_flip() +
+    theme(legend.position = 'top') +
+    labs(x = '', y = '', title = 'Variable Boxplots by mpg01')
+```
+
+#### (c)
+以80:20，將資料分成Train、Test
+```{r,echo=F}
+set.seed(1234)
+num_train <- nrow(Auto) * 0.8
+
+inTrain <- sample(nrow(Auto), size = num_train)
+
+train <- Auto[inTrain,]
+test <- Auto[-inTrain,]
+```
+
+#### (d)
+使用LDA模型，以Train資料配飾，預測Test資料，觀察所得之Confusion Matrix，準確率為88.61%，代表模型表現不錯。
+
+
+```{r,echo=F}
+require(MASS)
+fmla <- as.formula('mpg01 ~ displacement + horsepower + weight + year + cylinders')
+lda_model <- lda(fmla, data = train)
+
+
+pred <- predict(lda_model, newdata = test)
+pred_values <- pred$class
+
+xtab <- table(pred_values,test$mpg01)
+print(confusionMatrix(xtab[2:1,2:1]))
+
+```
+我們可以發現在4缸的歐洲車以及六缸的美國車佔錯誤的大宗，若以廠牌來看，Ford判斷錯誤出現次數最多，並且大部分都是mpg01為0代表實際是油耗較差的那群，可能顯示出Ford的造車可能存在與其他車廠之間的落差。
+```{r,echo=F}
+err =  test[which(pred_values!=test$mpg01),]
+print(err)
+```
+
+#### (e)
+使用QDA模型，以Train資料配飾，預測Test資料，觀察所得之Confusion Matrix，準確率為87.34%，表現略差於LDA。
+```{r,echo=F}
+qda_model <- qda(fmla, data = train)
+
+
+pred <- predict(qda_model, newdata = test)
+pred_values <- pred$class
+
+xtab <- table(pred_values,test$mpg01)
+print(confusionMatrix(xtab[2:1,2:1]))
+```
+
+使用QDA也有相似於LDA的結果，判斷錯誤的汽缸數皆是4,6缸，而不同的是此結果亞洲地區的車判斷錯誤比例上升。
+```{r,echo=F}
+err =  test[which(pred_values!=test$mpg01),]
+print(err)
+```
+
+#### (f)
+使用Logistic Regression模型，以Train資料配飾，預測Test資料，觀察所得之Confusion Matrix，準確率為87.34%，模型表現略差於LDA。
+```{r,echo=F}
+log_reg <- glm(fmla, data = train, family = binomial)
+
+
+pred <- predict(qda_model, newdata = test)
+pred_values <- pred$class
+
+xtab <- table(pred_values,test$mpg01)
+print(confusionMatrix(xtab[2:1,2:1]))
+```
+使用Logistic Regression也有相似於QDA的結果，判斷錯誤的汽缸數皆是4,6缸，亞洲地區的車判斷錯誤比例上升。
+```{r,echo=F}
+err =  test[which(pred_values!=test$mpg01),]
+print(err)
+```
+
+#### (g)
+將(b)裡所提出較可能較有解釋力的變數帶進KNN，並測試KNN的Center從1-15，可得到在c1=5,7的地方有最佳的Accuracy。
+```{r,echo=F}
+set.seed(1234)
+acc <- list()
+
+x_train <- train[,c('cylinders', 'displacement', 'horsepower', 'weight', 'year')]
+y_train <- train$mpg0
+x_test <- test[,c('cylinders', 'displacement', 'horsepower', 'weight', 'year')]
+
+acc =  sapply(1:15, function(x){
+  knn_pred <- knn(train = x_train, test = x_test, cl = y_train, k = x)
+    acc[as.character(x)] = mean(knn_pred == test$mpg01)
+})
+
+unlist(acc)
+```
+
+最後使用k=5，為所有模型裡面表現最佳 
+```{r,echo=F}
+knn_pred <- knn(train = x_train, 
+                test = x_test, 
+                cl = y_train, k = 5)
+
+xtab <- table(knn_pred,test$mpg01)
+print(confusionMatrix(xtab[2:1,2:1]))
+```
+
+在判斷錯誤的車裡面，大多屬於美國車，並且同樣為4,6缸。
+```{r,echo=F}
+err =  test[which(knn_pred!=test$mpg01),]
+print(err)
+```
+

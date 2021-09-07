@@ -1,0 +1,220 @@
+---
+title: "HW1"
+output:
+  word_document: default
+  html_document: default
+---
+
+## (8)
+### (a)
++ 我們用read.csv成功讀取資料，header=T 意思為讀取第一列(row)為變數名稱。
+```{r,eval=FALSE}
+college = read.csv("C:/Users/Lai/Desktop/統計學習/College.csv",header=T)
+head(college)
+```
+
+
+### (b)
++ 可利用rownames()來命名每個row，並且在命名完後刪掉第一行(Column)。
++ fix()的圖無法在Markdown呈現，放在文後。
+```{r,eval=FALSE}
+rownames(college)=college[,1]
+fix(college)
+
+college =college [,-1]
+fix(college)
+```
+
+### (c)
+#### <1>
++ summary()可看出每個變數的屬性，如此題Private為character，<br>
+其餘變數為數值資料，則列出簡單的敘述統計
+```{r,eval=FALSE}
+summary(college)
+```
+
+#### <2>
++ 第一個變數Private為character，故從第二個變數開始到第11個變數執行，<br>
+pairs()可畫出數值型資料兩兩變數間的散佈圖。
+
+```{r,eval=FALSE}
+pairs(college[,2:11])
+```
+
+#### <3>
++ 將Private的outcome讀做factor後放在x，Outstate的值放在y即可畫出分別的盒狀圖,<br>
+觀察下圖可發現Private為No的Outstate資料明顯低於Yes且Variance也明顯較低，資料較集中。
+其代表的意思為對於別州或國際學生的學費在私立大學明顯比公立的大學貴。
+```{r,eval=FALSE}
+plot(as.factor(college$Private),college$Outstate)
+```
+
+#### <4>
++ 將大學以Top10perc是否大於50分為兩群，使用summary()後呈現累積次數表等同table()
+```{r,eval=FALSE}
+Elite=rep("No",nrow(college ))
+Elite[college$Top10perc >50] = "Yes"
+Elite=as.factor(Elite)
+college=data.frame(college , Elite)
+summary(college$Elite)
+```
+
++ 由此盒狀圖可看到Yes組的明顯比No組的來得高，<br>
+代表在私立大學收到顯著比公立大學還要多，來自前10%高中的學生。
+```{r,eval=FALSE}
+plot(as.factor(college$Elite),college$Outstate)
+```
+
+#### <5>
++ 上方兩張圖代表App的Received 跟Accepted 的數量，明顯的呈現右偏，代表此App在大多學校裡並不流行
++ 下方兩張圖代表新生來自Top 10% , 25%的高中的數量，可明顯看到Top 10 為右偏，Top 25 較對稱，<br>
+符合我們對於成績優秀學生人數較少的直覺。
+```{r,eval=FALSE}
+par(mfrow=c(2,2))
+
+hist(college$Apps)
+hist(college$Accept)
+
+hist(college$Top10perc)
+hist(college$Top25perc)
+```
+
+#### (d)
++ 我們藉由前面對於Elite的定義(Yes/No)分為E1,E2兩個組群。
+```{r,eval=FALSE,warning=FALSE}
+library(dplyr)
+library(magrittr)
+
+E1 = college %>%
+  filter(Elite =="Yes")
+
+E2 = college %>%
+  filter(Elite =="No")
+```
+
++ 明顯可看為Elite大學的Graduation rate為左偏分配，且集中100左右，而非Elite大學的Graduation rate的分配較為對稱，平均落在60%左右，由畢業率的差異，可見此Elite變數可有效分別出成績較優秀的學生。
+```{r,eval=FALSE}
+par(mfrow=c(1,2))
+
+hist(E1$Grad.Rate,breaks = 10,xlim = c(0,120))
+hist(E2$Grad.Rate,breaks = 10,xlim = c(0,120))
+```
+
++ 明顯可看為Elite大學的Out-of-state tuition 為左偏分配，且集中20000左右，
+而非Elite大學的Graduation rate的分配則略為右偏，平均落在10000左右，
+顯示出被判斷為Elite的大學對於別州、國際學生的收費較非Elite的大學更貴。
+```{r,eval=FALSE}
+par(mfrow=c(1,2))
+
+hist(E1$Outstate,breaks = 10,xlim = c(0,25000))
+hist(E2$Outstate,breaks = 10,xlim = c(0,25000))
+```
+
+## (10)
+### (a)
++ 總共有506個row，14個columns，row代表觀測值，columns代表變數
+```{r,eval=FALSE}
+library(MASS)
+str(Boston)
+```
+
+### (b)
++ rm 代表平均每間住宅有幾個房間 <br>
++ Istat 代表人口中屬於較低階級的比例 <br>
++ medv  代表區域房價的中位數 <br> 
++ crim 代表 平均的犯罪率<br>
++ chas 代表 是否在Charles River邊<br>
++ age  代表  1940年之前建造的自有住房的比例。 <br>
++ tax 代表 每10,000美元的財產稅率。 <br>
++ ptration 代表各區的師生比例 
+<br>
+
++ 由圖一可見隨著平均房間數增加，低端人口比例顯著的遞減，推論可能是因為房間數的增加代表此區住戶多為一整個家庭，也因此能組成一個家庭的人的收入不大可能會是低端人口，也因此房價亦隨著平均房間數的增加而升高呈現正相關。
+
++ 由圖二可明顯看到在河畔的犯罪件數明顯低上不少，代表河邊住的可能為較高端的人口，也因此治安較佳。
+```{r,eval=FALSE}
+data(Boston)
+pairs(Boston[,c("rm","lstat","medv")])
+pairs(Boston[,c("crim","chas")])
+```
+
+### (c)
++ 由圖可見，age代表舊房屋的比例，而隨著age的比例升高，crim的件數也增加，推論舊城區的地方治安較差。<br>
++ medv與crim呈現負相關，由之前的推論房價低的地方低端人口的比例較高，
+由以上推論可得房價較低的地方低端人口較多影響治安較差。
++ 從black與age可看出大部分的黑人族群都住在舊城區，也因此與crim的關係與age相似，在黑人較多的地區，犯罪件數較多。
+```{r,eval=FALSE}
+pairs(Boston[,c("age","medv","black","crim")])
+```
+
+### (d)
++ 列出crim,tax,ptratio大於90百分位數的觀測值，發現各變數所列的出的觀測值皆不重複，且各組之間的所篩選出的觀測值有連續性
+(E.g. crim取出的資料為第370~480筆,tax取出的資料為第489~493筆)
+```{r,eval=FALSE}
+which(Boston$crim>quantile(Boston$crim,0.9))
+which(Boston$tax>quantile(Boston$tax,0.9))
+which(Boston$ptratio>quantile(Boston$ptratio,0.9))
+```
+
+### (e)
++ 由table可看出有35區在Charles River旁。
+```{r,eval=FALSE}
+table(Boston$chas)
+barplot(table(Boston$chas))
+```
+
+### (f)
++ ptratio的中位數為19.05，代表平均的師生比例為一個老師需要教導約19個學生。
+```{r,eval=FALSE}
+median(Boston$ptratio)
+```
+
+### (g)
++ 首先發現第399,406筆資料為最小的medv(中位數房價)，接著以crim,black,age等變數來看他們與平均值的差異，
+由以下結果可發現，該兩區的犯罪件數明顯比平均高，黑人比例亦比平均高，且兩者皆為舊城區。
+```{r,eval=FALSE}
+which(Boston$medv==min(Boston$medv))
+paste("medv ", "Min(399):",Boston[399,"medv"],"v.s.","Average:",round(mean(Boston[,"medv"]),2))
+paste("crim ", "Min(399):",Boston[399,"crim"],"v.s.","Average:",round(mean(Boston[,"crim"]),2))
+paste("black ", "Min(399):",Boston[399,"black"],"v.s.","Average:",round(mean(Boston[,"black"]),2))
+paste("age ", "Min(399):",Boston[399,"age"],"v.s.","Average:",round(mean(Boston[,"age"]),2))
+
+paste("medv ", "Min(406):",Boston[406,"medv"],"v.s.","Average:",round(mean(Boston[,"medv"]),2))
+paste("crim ", "Min(406):",Boston[406,"crim"],"v.s.","Average:",round(mean(Boston[,"crim"]),2))
+paste("black ", "Min(406):",Boston[406,"black"],"v.s.","Average:",round(mean(Boston[,"black"]),2))
+paste("age ", "Min(406):",Boston[406,"age"],"v.s.","Average:",round(mean(Boston[,"age"]),2))
+
+```
+
+
+
+### (h)
++ 列出平均房間大於7間、8間的區數
+```{r,eval=FALSE}
+which(Boston$rm > 7) %>% length()
+which(Boston$rm > 8) %>% length()
+```
+
++  以平均房間數8間做為分組標準，畫出兩組的中位數房價直方圖，由圖可見，
+大於7間的房價為左偏分配大多落在30以上，而小於8間的房價為右偏分配，且平均約略落在20-30之間，
+由以上敘述可推論房間數較多的住宅區有較高的房價。
+```{r,eval=FALSE}
+morethan8 = Boston[which(Boston$rm >= 8),]
+notmorethan8 = Boston[which(Boston$rm < 8),]
+
+par(mfrow=c(1,2))
+hist(morethan8$medv,xlim = c(0,50),breaks = 20)
+hist(notmorethan8$medv,xlim = c(0,50),breaks = 20)
+
+paste("medv ", "morethan8:",round(mean(morethan8[,"medv"]),2),"v.s.","notmorethan8:",round(mean(notmorethan8[,"medv"]),2))
+```
+
++ 平均房數大於8間的區域的犯罪率明顯比小於8間的還要小。
+```{r,eval=FALSE}
+par(mfrow=c(1,2))
+hist(morethan8$crim,breaks = 20)
+hist(notmorethan8$crim,breaks = 20)
+
+paste("crim ", "morethan8:",round(mean(morethan8[,"crim"]),2),"v.s.","notmorethan8:",round(mean(notmorethan8[,"crim"]),2))
+```
+

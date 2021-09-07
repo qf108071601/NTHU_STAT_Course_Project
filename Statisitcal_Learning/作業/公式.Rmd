@@ -1,0 +1,28 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+基於 Oh and Patton (2017) 提出基於 GAS結構下之動態Copula，用來  處理多群體間具有相關性之問題。在考量聯合及動態的時間序列資料情況下，可以知道資料之邊際分配如下：
+
+$$Y_{it} = \mu_{it}(\alpha_{i,0})+\sigma_{it}(\alpha_{i,0})\eta_{it} \ i=1,2,...,N$$
+
+$$\eta_{it}|F_{r-1}~F_{it}(\alpha_{i,0})$$
+
+其中$\mu_{it}$為$Y_{it}$的條件期望值、$\sigma_{it}$為$Y_{it}$的條件標準差、$F_{it}(\phi_{i,0})$是一個平均數為0、標準差為1的有母數分配。接著根據機率積分轉換至$U(0,1)$如下式：
+$$U_{it} = F_{it}(\frac{Y_{it}-\mu_{it}(\alpha_{i,0})}{\sigma_{it}(\alpha_{i,0})}), \ i=1,2,...,N$$
+推測$Y_{it}|F_{t-1}$等價於$U_{it}|F_{t-1}$的條件Copula分配：
+$$U_{it}|F_{t-1} \sim C_{t}(\gamma_0)$$
+
+
+
+
+
+與過去q期之隨機誤差MA(q)共同組成,，並且誤差項$e_{it}$由過去j期變異數$\sigma^{2}_{it}$與過去k期之誤差平方$e^{2}_{it}$所組成，
+用此$GARCH(j,k)$模型來配適時間序列波動群聚之現象。
+
+
+
+
+
+

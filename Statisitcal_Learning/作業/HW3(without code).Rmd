@@ -1,0 +1,225 @@
+---
+title: "HW3"
+author: "108071601 計財所碩二 賴冠維"
+date: "2020/11/1"
+output:
+  word_document: default
+  html_document: default
+---
+```{r,echo=F}
+library(magrittr)
+options(scipen = 999)
+```
+
+
+```{r,echo=F}
+set.seed(36)
+n = 100; sigma = 5; beta0 = c(2,-2,0.5,1,-3)
+cormat = diag(1,nrow=5,ncol=5) ; cormat[cormat==0] = 0.5
+cholmat = chol(cormat) #Choleskey分解
+x= matrix(rnorm(5*n,0,1), ncol = 5) %*% cholmat
+err = rnorm(n,0,sigma)
+y = x %*% beta0 + err
+```
+
+## (2)
+  
+#### (a)
+先對$X_i$進行標準化,產生$Z_i$,  
+並且對$Y_i$進行去中心化，產生$\widetilde{Y_i}$
+```{r,echo=F}
+library(glmnet)
+
+x_center = sapply(1:5,function(a)
+  {
+  mean(x[,a])
+       }
+  )
+
+x_sd = sapply(1:5, function(a){
+  sd(x[,a])
+  }
+  )
+
+z = sapply(1:5, function(a){
+  (x[,a] - x_center[a])/x_sd[a]
+})
+
+y_1 = y - mean(y)
+```
+  
+首先固定$\lambda$為0.01，再利用glmnet函式估計Ridge Regression的OLS解，
+分為$(x_i,y_i)$、$(z_i,\widetilde{Y_i})$兩組進行，  
+求得參數**par1**及**par2**，分別代表$\widehat{\beta}$以及$\widetilde{\beta}$
+```{r,echo=F}
+fit_ridge = glmnet(x = x,y = y,alpha = 0)
+(par1 = fit_ridge %>% coef(s=0.01) %>% as.numeric())
+
+fit1_ridge = glmnet(x = z,y = y_1,alpha = 0)
+(par2 = fit1_ridge %>% coef(s=0.01) %>% as.numeric())
+```
+  
+因為$z_i$不為方陣，因此在求反矩陣時使用$Moore-Penrose偽逆矩陣$。    
+藉此我們便可從$\widetilde{\beta}$推得$\widehat{\beta}$,矩陣表示式如下：  
+$$X\widehat{\beta} = Z\widetilde{\beta}$$  
+$$\widehat{\beta} = X^{-1}Z\widetilde{\beta}$$
+
+
+- 表一為從$\widetilde{\beta}$推導$\widehat{\beta}$的數值  
+- 表二為上題從glmnet()函式所得到的參數。
+```{r,echo=F}
+library(MASS)
+ginv(x) %*% z %*% par2[2:6]
+paste0("Beta_hat ",seq(1:5),": ",par1[2:6]) %>% as.matrix()
+```
+  
+此外也可從$\widehat{\beta}$推得$\widetilde{\beta}$的數值，  
+承列如下：  
+```{r,echo=F}
+ginv(z) %*% x %*% par1[2:6]
+paste0("Beta_Standardize ",seq(1:5),": ",par2[2:6]) %>% as.matrix()
+```
+
+#### (b)
+  
+  產生$\lambda_i:2^{-10}、2^{-9}...、2^{4}、2^{5}$共16組
+```{r,echo=F}
+(num = 2^c(-10:5)%>% sort(decreasing = T)) %>% as.matrix()
+```
+由於此題定義的Loss Function如下：
+$$min \frac{1}{2N}\Sigma^{N}_{i=1}(y_i-\Sigma^p_{j=1}x_{ij}\beta_j)^2+\lambda\Sigma^j_{j=1}\beta^2_j$$
+
+故一階導數為0之最小值，其矩陣表示式為：  
+$$\widehat{\beta}^{ridge}_\lambda = (\frac{1}{N}X^{T}X+2\lambda I_p)^{-1}\frac{1}{N}X^{T}Y$$
+且上式X需要標準化，Y需去中心化，可得結果如下
+
+1. 依不同的$\lambda_i$所求之$\widehat{\beta}(\lambda)$畫出Solution Path Line Plot
+```{r,echo=F}
+par_own = sapply(1:16, function(a){
+  q = solve((1/length(y_1))*t(z)%*%z + 2*num[a]*diag(1,nrow=5,ncol=5))
+  p = (1/length(y_1))*t(z) %*% y_1
+  ans = q %*% p
+})
+
+n = log(num)
+plot(par_own[1,],x=n,type = "b",ylim = c(-5,5),pch=2,xlab = "Log Lambda",
+     ylab= "Coifficient")
+
+for (i in 2:5) {
+  par(new=T)
+  plot(par_own[i,],x=n,type = "b",ylim = c(-5,5),pch=i+1,ylab= "",xlab = "")
+}
+```
+
+2. 列出從*$(2^{-10}...2^{5})$*之下的$\widehat{\beta}(\lambda)$
+```{r,echo=F}
+par_own = sapply(1:16, function(a){
+  par_own[,a] = par_own[,17-a]
+})
+
+par_own %>% as.matrix()
+```
+
+
+$\widehat{\beta}(2)$ 在Origin Scale下的估計值 
+```{r,echo=F}
+a = solve(t(x)%*%x + 2*diag(1,nrow=5,ncol=5))
+a %*% t(x) %*% y %>% as.matrix()
+```
+
+
+#### (c)
+使用glmnet()函式所求給定在$\lambda_i$之下的$\widehat{\beta}(\lambda)$的估計值
+```{r,echo=F}
+num = 2^c(-10:5)%>% sort(decreasing = T)
+fit2_ridge = glmnet(x = z,
+                    y = y_1,
+                    alpha = 0,
+                    lambda = num)
+par_glment =  fit2_ridge$beta %>% as.matrix()
+
+par_glment = sapply(1:16, function(a){
+  par_glment[,a] = par_glment[,17-a]
+})
+par_glment
+```
+
+將glmnet()所求之$\widehat{\beta}(\lambda)$畫出Solution Path Line Plot
+```{r,echo=F}
+plot(fit2_ridge, xvar = "lambda",label = T)
+```
+
+* 從(b),(c)小題兩種估計的Coefficients可發現:  
+1. 兩者的所估計的值於$2^{-10}$的時候近乎相同，但隨$i$變動，兩數之間開始出現差異，可見到$2^{5}$時，兩數已明顯不相同。
+2. 由Solution Line Plot 更可明顯看出 自行推導的矩陣解並未收斂。  
+由上述兩點推測，差異的來源可來自於:  
+glmnet()函式所用的Loss Function與課程上所推導的有差別。
+  
+  
+  使用vignette()查閱glmnet套件的說明後發現，  
+  
+glmnet的默認的分配為Gaussian，以下為glmnet所用Ridge Regression的Loss Function：
+$$min \frac{1}{2N}\Sigma^{N}_{i=1}(y_i-\beta_0-x_i^{T}\beta)^2+\lambda[||\beta||^2_2/2]$$
+與此題所使用的Loss Function 不相同，
+$$min \frac{1}{2N}\Sigma^{N}_{i=1}(y_i-\Sigma^p_{j=1}x_{ij}\beta_j)^2+\lambda\Sigma^j_{j=1}\beta^2_j$$
+因此兩者差異可能來自：  
+後面$\lambda$項差了一個除以2的部分，而導致我們自己求的矩陣解的$\lambda_i$效果為套件的2倍，    因此隨著$\lambda_i$的值增加兩者的差異擴大，也導致自行求的矩陣解收斂速度快於glmnet()
+
+```{r,echo=F}
+vignette("glmnet")
+```
+
+#### (d)
+使用Cross Validation的方式計算模型在不同$\lambda_i$之下的表現，表現如下：  
+可以發現不管是min或lse之下，都是5個參數，並未達到變數篩選的功能，    其原因可能來自我們使用模擬的隨機項，變數間並無意義上的差別。
+```{r,echo=F}
+set.seed(10)
+CVRidge = cv.glmnet(x = z,y = y_1,family = "gaussian",lambda = num,nfold = 10,alpha = 0)
+CVRidge
+plot(CVRidge)
+```
+
+我們將資料以$(75\%,25\%)$分為Train、Test Set  
+接著以$\lambda_{min}$及$\lambda_{lse}$ 配飾兩個$RidgeRegression$  
+以Train Set 配飾模型，比較其預測Test Set 的SSE，借此衡量兩模型的表現。
+
+```{r,echo=F}
+set.seed(123)
+index = sample(1:100,size = 75,replace = F)
+trainx = z[index,]
+trainy = y_1[index,]
+testx = z[-index,]
+testy = y_1[-index,]
+```
+
+```{r,echo=F}
+ridge1 = glmnet(x = trainx,y = trainy,family = "gaussian",alpha = 0,lambda = CVRidge$lambda.min)  
+
+ridge2 = glmnet(x = trainx,y = trainy,family = "gaussian",alpha = 0,lambda = CVRidge$lambda.1se )   
+```
+
+兩個模型估計出不同的$\widehat{\beta_i}$
+```{r,echo=F}
+print(ridge1$beta)
+print(ridge2$beta)
+```
+
+由此可見使用$\lambda_{lse}$的模型的SSE較小，表現較佳
+```{r,echo=F}
+pred_ridge1 = predict(ridge1,testx)
+pred_ridge2 = predict(ridge2,testx)
+
+paste0("SSE of lambda.min: ",sum((pred_ridge1-testy)^2))
+paste0("SSE of lambda.lse: ",sum((pred_ridge2-testy)^2))
+```
+
+但由Predict-Y Plot可見，圓圈為真實值，另兩個符號為預測值，表現皆不佳，無法有效預測Y。
+```{r,echo=F}
+plot(testy,xlim = c(0,25),ylim = c(-5,10),main = "Lambda_min")
+points(pred_ridge1,col=2,pch=2)
+
+plot(testy,xlim = c(0,25),ylim = c(-5,10),main = "Lambda_lse")
+points(pred_ridge2,col=2,pch=3)
+
+```
+

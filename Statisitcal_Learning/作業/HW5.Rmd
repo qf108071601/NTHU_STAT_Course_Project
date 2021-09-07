@@ -1,0 +1,354 @@
+---
+title: "HW5"
+author: "賴冠維"
+date: "2020/12/4"
+output:
+  word_document: default
+  html_document: default
+---
+```{r,echo=F}
+library(tidyverse)
+library(ISLR)
+library(leaps)
+```
+
+### (8)  
+#### (a)  
+設定set.seed(12345),以rnom()取出x,e各100個observations
+```{r,echo=F}
+set.seed(1234567)
+X = rnorm(100)
+e = rnorm(100)
+par(mfrow=c(1,2))
+plot(X,main="X")
+plot(e,main="e")
+```
+
+#### (b)
+製造$Y = \beta_0+\beta_1X+\beta_2X^2+\beta_3X^3+\epsilon$  
+設定$\beta_0到\beta_3$為$(1,10,5,20)$
+```{r,echo=F}
+Y = 1+10*X+5*X^2+20*X^3+e
+```
+
+#### (c)
+首先使用默認方法，即為Exhaustive Search (窮舉所有方法)，所得如下：  
+可以看到默認為到擷取8個變數，並列出每個變數下表現最好的變數組合。
+```{r,echo=F}
+predictors = sapply(1:10, function(a){
+  X^a
+})
+
+data = cbind(predictors,Y) %>% as.data.frame()
+model = regsubsets(x=data[,1:10],y=data[,11],data=data)
+summary(model)
+modelsum = summary(model)
+```
+
+接著以$Cp、BIC、Adj\ R\ square$三種不同標準來挑選變數，  
+以Cp(複雜度)最低、BIC值最小、Adj R^2最大為標準進行變數篩選，  
+可以看到這三種方法($Cp、BIC、Adj\ R\ square$)分別挑選了4、3、5個變數，  
+並且變數組成也不盡相同，代表不同方法所在意的地方都各有差異。
+```{r,echo=F}
+par(mfrow=c(1,3))
+
+modelsum$cp %>% plot(lwd =1.7, cex = .8,pch= 5,type="b",main= "Selected by Cp")
+paste("Cp Select:",which.min(modelsum$cp),"Variables")
+coef(model,which.min(modelsum$cp))
+
+modelsum$bic %>% plot(lwd =1.7, cex = .8,pch= 8,type="b",main= "Selected by BIC")
+paste("BIC Select:",which.min(modelsum$bic),"Variables")
+coef(model,which.min(modelsum$bic))
+
+# Adj R^2
+modelsum$adjr2 %>% plot(lwd =1.7, cex = .8,pch= 7,type="b",main= "Selected by adjusted R^2")
+paste("Adj R^2 Select:",which.max(modelsum$adjr2),"Variables")
+coef(model,which.max(modelsum$adjr2))
+
+```
+
+
+#### (d)
+
+首先使用Forward stepwise Selection，Forward Stepwise的作法：  
+* 在一個空的迴歸中逐一添加變數，直到任何一個變數的額外貢獻度(AIC、BIC、Cp等)無統計意義就停止。
+  
+可以看到這三種方法($Cp、BIC、Adj\ R\ square$)分別挑選了4、3、5個變數，  
+與前述結果相同。
+```{r,echo=F}
+model_f = regsubsets(x=data[,1:10],y=data[,11],data=data,method = "forward")
+modelf_sum = summary(model_f)
+
+par(mfrow=c(1,3))
+
+modelf_sum$cp %>% plot(lwd =1.7, cex = .8,pch= 5,type="b",main= "Selected by Cp")
+paste("Cp Select:",which.min(modelf_sum$cp),"Variables")
+coef(model,which.min(modelf_sum$cp))
+
+modelf_sum$bic %>% plot(lwd =1.7, cex = .8,pch= 8,type="b",main= "Selected by BIC")
+paste("BIC Select:",which.min(modelf_sum$bic),"Variables")
+coef(model,which.min(modelf_sum$bic))
+
+modelf_sum$adjr2 %>% plot(lwd =1.7, cex = .8,pch= 7,type="b",main= "Selected by adjusted R^2")
+paste("Adj R^2:",which.max(modelf_sum$adjr2),"Variables")
+coef(model,which.max(modelf_sum$adjr2))
+```
+
+接下來採用Backwards stepwise Selection，Backward Stepwise：  
+* 在一個完整的迴歸中，逐一移除變數，直到移除任何一個變數時，模型都會損失過多的解釋力，那就停止。
+
+可以看到這三種方法($Cp、BIC、Adj\ R\ square$)分別挑選了3、3、5個變數，  
+僅Cp挑選結果改變，其餘相同。
+```{r,echo=F}
+model_f = regsubsets(x=data[,1:10],y=data[,11],data=data,method = "backward")
+modelf_sum = summary(model_f)
+
+par(mfrow=c(1,3))
+# Cp
+modelf_sum$cp %>% plot(lwd =1.7, cex = .8,pch= 5,type="b",main= "Selected by Cp")
+paste("Cp Select:",which.min(modelf_sum$cp),"Variables")
+coef(model,which.min(modelf_sum$cp))
+
+# BIC
+modelf_sum$bic %>% plot(lwd =1.7, cex = .8,pch= 8,type="b",main= "Selected by BIC")
+paste("BIC Select:",which.min(modelf_sum$bic),"Variables")
+coef(model,which.min(modelf_sum$bic))
+
+# Adj R^2
+modelf_sum$adjr2 %>% plot(lwd =1.7, cex = .8,pch= 7,type="b",main= "Selected by adjusted R^2")
+paste("Adj R^2:",which.max(modelf_sum$adjr2),"Variables")
+coef(model,which.max(modelf_sum$adjr2))
+```
+
+#### (e)
+使用Lasso Regression，並且使用Cross Validation 來挑選最佳的$\lambda$，可由下圖所見：  
+不論是$\lambda_{min}$或是$\lambda_{lse}$皆選取3個變數。
+```{r,echo=F}
+require(glmnet)
+
+d = as.matrix(data)
+CV_lasso = cv.glmnet(x = d[,-11],y = d[,11],
+                     family = "gaussian",nfold = 10,alpha = 1)
+plot(CV_lasso)
+CV_lasso
+```
+$\lambda_{min}$ 選到$X_1,X_2,X_3$，其參數為9.148515,3.866065,19,799337
+```{r,echo=F}
+lasso_min = glmnet(x = d[,-11],y = d[,11],
+                   family = "gaussian",alpha = 1,lambda = CV_lasso$lambda.min)  
+
+lasso_lse = glmnet(x = d[,-11],y = d[,11],
+                   family = "gaussian",alpha = 1,lambda = CV_lasso$lambda.1se)  
+
+print(lasso_min$beta)
+```
+
+$\lambda_{lse}$ 選到$X_1,X_2,X_3$，其參數為9.105123,3.764425,19,767835
+```{r,echo=F}
+print(lasso_lse$beta)
+```
+
+可以發現不論是$\lambda_{min}$或是$\lambda_{lse}$其所選取之變數以及所配飾參數的值  皆與使用Forward、Backward Selection時採用Cp、BIC標準時  
+所選取之變數相同，配飾參數的值也相近。
+
+#### (f)
+製造新的$Y_1 = 5+7X^7+\epsilon$
+```{r,echo=F}
+Y_1 = 5+7*X^7+e
+data = cbind(predictors,Y_1) %>% as.data.frame()
+```
+
+可以發現三種不同方法所選取的變數皆不同，相同的是皆選取了$X_7$並且參數十分接近當初所模擬的值，  
+可能是因為$X_7$為7次方項，整個$Y_1$幾乎由$X_7$這個變數決定，造成其餘變數估計較不準確，  但是BIC所選取變數與當初設定相同，而且配適參數相當接近，是三個當中表現最佳者。
+```{r,echo=F}
+model = regsubsets(Y_1~.,data=data)
+modelsum = summary(model)
+
+par(mfrow=c(1,3))
+# Cp
+modelsum$cp %>% plot(lwd =1.7, cex = .8,pch= 5,type="b",main= "Selected by Cp")
+paste("Cp Select:",which.min(modelf_sum$cp),"Variables")
+coef(model,which.min(modelsum$cp))
+
+# BIC
+modelsum$bic %>% plot(lwd =1.7, cex = .8,pch= 8,type="b",main= "Selected by BIC")
+paste("BIC Select:",which.min(modelf_sum$bic),"Variables")
+coef(model,which.min(modelsum$bic))
+
+# Adj R^2
+modelsum$adjr2 %>% plot(lwd =1.7, cex = .8,pch= 7,type="b",main= "Selected by adjusted R^2")
+paste("Adj R^2:",which.max(modelf_sum$adjr2),"Variables")
+coef(model,which.max(modelsum$adjr2))
+```
+
+由Lasso Regression所篩選之變數，皆僅選取$X_7$出來  
+可以發現Lasso Regression可能為更保守的變數選取方法
+```{r,echo=F}
+require(glmnet)
+
+d = as.matrix(data)
+CV_lasso = cv.glmnet(x = d[,-11],y = d[,11],
+                     family = "gaussian",nfold = 10,alpha = 1)
+plot(CV_lasso)
+CV_lasso
+
+lasso_min = glmnet(x = d[,-11],y = d[,11],
+                   family = "gaussian",alpha = 1,lambda = CV_lasso$lambda.min)  
+
+lasso_lse = glmnet(x = d[,-11],y = d[,11],
+                   family = "gaussian",alpha = 1,lambda = CV_lasso$lambda.1se)  
+
+print(lasso_min$beta)
+print(lasso_lse$beta)
+```
+
+
+### (10)
+#### (a)
+建立 $X$、$\beta$、$Y$、$\epsilon$
+```{r,echo=F}
+set.seed(1234567)
+X = matrix(rnorm(20000),ncol=20)
+b = c(0.001,0.0001,0.001,13,0.004,
+      0.007,15,16,0.005,17,
+      0.008,-0.002,19,20,-0.001,
+      0.005,22,0.003,23,0.003) %>% as.matrix(ncol=1)
+e = rnorm(1000)
+Y = X%*%b+e
+
+cat("X",str(X))
+cat("beta",str(b))
+cat("Y",str(Y))
+
+data = cbind(X,Y)
+```
+
+
+#### (b)
+把DATA拆成Train、Test，Train有100筆、Test有900筆
+```{r,echo=F}
+set.seed(1122)
+index = sample(1:1000,100,replace = F)
+data = as.data.frame(data)
+names(data) = c(paste0("X",seq(1:20)),"Y")
+
+train = data[index,]
+test = data[-index,]
+
+cat("Train:",dim(train)); cat("Test:",dim(test))
+```
+
+#### (c)
+列出以Train Data配飾，在變數選取1個至8個時,表現最佳的模型，  
+列出這8個模型的MSE，可以發現在增加變數個數後，MSE顯著遞減。
+```{r,echo=F}
+model = regsubsets(x = train[,1:20],y = train[,21],data=train)
+model_sum = summary(model)
+MSE = model_sum$rss/20 
+plot(MSE,lwd =1.7, cex = .8,pch= 5,type="b",main= "Selected by MSE")
+
+```
+
+#### (d)
+用上述根據Train Data所選的所含變數1個至所含變數8個的最佳模型預測Test Data，  
+一樣可以發現當變數數量增加，Test Data的MSE隨變數數量顯著遞減。
+```{r,echo=F}
+ind = model_sum$which %>% .[1,-1] #去掉截距項
+sub = train[,ind] %>% cbind(Y = train$Y) %>% as.data.frame()
+names(sub) = c("X19","Y")
+model = lm(Y~.,data=sub)
+Y_hat = predict(model,newdata = test[,-21])
+M_1=sum((Y_hat-test$Y)^2)/dim(sub)[2]-1  #sub扣掉Y其他為解釋變數
+
+
+MSE = sapply(2:8, function(a){
+  ind = model_sum$which %>% .[a,-1] #去掉截距項
+  sub = train[,ind] %>% cbind(Y = train$Y)
+  model = lm(Y~.,data=sub)
+  Y_hat = predict(model,newdata = test[,-21])
+  sum((Y_hat-test$Y)^2)/dim(sub)[2]-1  #sub扣掉Y其他為解釋變數
+})
+
+MSE = c(M_1,MSE)
+
+plot(MSE,lwd =1.7, cex = .8,pch= 8,type="b",main= "MSE of Test by each Size")
+
+```
+
+#### (e)
+由上圖可以看到在變數數量為8時有最小的MSE，因此認為是最佳的Model，  
+下面列出所選的8個變數以及對Test Data預測時的MSE。
+```{r,echo=F}
+ind = model_sum$which %>% .[8,-1] #去掉截距項
+sub = train[,ind] %>% cbind(Y = train$Y) %>% as.data.frame()
+model_sum$which %>% .[which.min(MSE),] %>% as.matrix()
+model = lm(Y~.,data=sub)
+Y_hat = predict(model,newdata = test[,-21])
+M_1=sum((Y_hat-test$Y)^2)/dim(sub)[2]-1  #sub扣掉Y其他為解釋變數
+paste("MSE of the Best Model in All Model Size(8 Variables): ",M_1)
+
+```
+
+#### (f)
+我們可以發現我們設定的所有變數都被Train Data 所配飾的Model篩選出來。
+```{r,echo=F}
+cat("The significant variables that we set : ",which(b>1))
+```
+
+```{r,echo=F}
+cat("The Variabls select in the best model using train data: ",model_sum$which %>% .[which.min(MSE),] %>% which(TRUE) %>% names())
+```
+
+#### (g)
+此題計算$\sqrt{\Sigma^{p}_{j=1}(\beta_j-\beta_{j}^{r})^2}$，  
+計算在不同Model Size下$\beta$的距離，由圖可知當變數個數為8時，有最小的Distance，  
+故為表現最佳的模型，但此方法並不如其他方法來的穩健，
+可以看到Distance先隨著變數個數下降，但中間又陡升，最後變數個數為8時，才降至最低。
+```{r,echo=F}
+model_full = lm(Y~.,data=data)
+model_sub = regsubsets(Y~.,data=data)
+
+model_sub_sum = summary(model_sub)
+```
+
+
+```{r,echo=F}
+coef = matrix(0,ncol = 20,nrow = 8) %>% as.data.frame()
+names(coef) = c(paste0("X",seq(1:20)))
+
+for (a in 2:8) {
+  ind = model_sub_sum$which %>% .[a,-1] #去掉截距項
+  sub = data[,ind] %>% cbind(Y = train$Y) %>% as.data.frame()
+  lm_sub = lm(Y~.,data = sub)
+  coef[a,which(colnames(data) %in% names(lm_sub$coefficients)[-1])] = lm_sub$coefficients[-1]
+}
+```
+
+```{r,echo=F}
+beta = sapply(1:8, function(a){
+  sqrt(sum((model_full$coefficients[-1] - coef[a,])^2))
+})
+
+plot(beta,type = "b",pch= 10,main = "Sum of Squares Beta")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
