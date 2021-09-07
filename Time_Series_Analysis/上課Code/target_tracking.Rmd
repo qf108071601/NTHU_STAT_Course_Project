@@ -1,0 +1,147 @@
+---
+title: "Demo: Target tracking using state space model"
+date: "2020/5/28"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r warning=FALSE, message=FALSE}
+#load package
+library(astsa)
+library(latex2exp) #latex
+```
+
+
+#### Simulated data to mimic the trajectory of a moving object.
+
+* observed 2-dim location: $y_t=x_t+\epsilon_t$ (it has measurement error)
+* true 2-dim location: $x_t=x_{t-1}+(v+\eta_t)$
+* 2-dim speed at time t: $v+\eta_t$ (whih is around the mean speed v with some variation)
+
+
+```{r, fig.height=5, fig.width=7}
+n=30
+v = c(1,1)*0.5 #mean speed
+x = matrix(0,n,2)
+eps = 0.5*matrix(rnorm(n*2),n,2) #measurement error
+eta = 0.2*matrix(rnorm(n*2),n,2) #speed variation
+for (i in 2:n) {
+  x[i,] = x[i-1,]+v+eta[i,]
+}
+
+y = x+eps
+
+par(mfcol=c(1,1))
+plot(y,xlab="x-loc", ylab="y-loc", pch=3, cex=0.8, lwd=2) 
+lines(x, col=2, pch=16) #true signal
+legend("topleft",legend=c("true signal","noisy obs'n"),col=c(2,1),pch=c(16,3), bty="n")
+```
+
+#### Assuming Random level model (2-dim) with given system matrices
+
+* $y_t = A x_t + \epsilon_t, \epsilon_t\sim N(0,R)$
+* $x_t = \Phi x_{t-1}+ \eta_t, \eta\sim N(0,Q)$
+* set $A=I_2, \Phi=I_2, R=Q=I_2$
+* check filter/predictor/smoother for tracking the true location 
+
+```{r, fig.height=5, fig.width=7}
+A = diag(2)
+mu0 = y[1,]
+Sigma0 = var(y)
+Phi = diag(2)
+cQ = diag(2)
+cR = diag(2)
+
+y.Kf = Kfilter0(n,y,A,mu0,Sigma0,Phi,cQ,cR)
+y.sm = Ksmooth0(n,y,A,mu0,Sigma0,Phi,cQ,cR) 
+
+par(mfcol=c(1,1))
+plot(y,xlab="x-loc", ylab="y-loc", pch=3, lwd=2, cex=0.8) 
+lines(x, col=2, pch=16) #true signal
+points(x[1,1],x[1,2],col=2, pch=16, cex=1.8) 
+lines(t(y.Kf$xf[,1,]),col=3, pch=16)  #filter value
+lines(t(y.sm$xs[,1,]),col=4, pch=16) #smoother
+legend("topleft",legend=c("true signal","filter","smoother","noisy obs'n"),col=c(2,3,4,1),pch=c(16,16,16,3), bty="n")
+```
+
+#### Assuming Random level & slope model (2-dim) with unknown system parameters
+
+\begin{eqnarray*}
+\mbox{measurement eq:} \quad y_t &=& (I_2,0_2) \left(\begin{array}{c} x_t \\ v_t \end{array}\right) +\epsilon_t, \epsilon_t\sim N(0,R),\\
+\mbox{state eq:} \quad 
+\left(\begin{array}{c} x_t \\ v_t \end{array}\right) &=& \left(\begin{array}{cc} I_2 & I_2 \\ 0 & I_2 \end{array}\right)\left(\begin{array}{c} x_t \\ v_t \end{array}\right) + w_t, w_t\sim N(0,Q).
+\end{eqnarray*}
+
+* write a function for computing -logL via Kalman filter
+* estimate parameters to minimize -logL
+
+```{r, fig.height=5, fig.width=7}
+#Random loc + speed
+n = nrow(y)
+#A = array(cbind(diag(2),0,0), dim=c(2,4,n))
+A = cbind(diag(2),0,0)
+mu0 = c(y[1,],y[2,]-y[1,])
+Sigma0 = diag(4)  
+Phi = cbind(rbind(diag(2),diag(0,2)), rbind(diag(2),diag(2)))
+
+
+# Function to Calculate -logL
+#y:nx2
+tracking.neglogL = function(para){
+  cQ = matrix(0,4,4)
+  cQ[!lower.tri(cQ)] = para[1:10]
+  cR = matrix(0,2,2)
+  cR[!lower.tri(cR)] = para[11:13]
+  kf = Kfilter0(n,y,A,mu0,Sigma0,Phi,cQ,cR)
+  return(kf$like) 
+}
+
+
+cQ.init = diag(0.2,4)
+cR.init = diag(0.3,2)
+
+init.par = c(cQ.init[!lower.tri(cQ.init)],cR.init[!lower.tri(cR.init)])  # initial values of parameters
+
+est = optim(init.par, tracking.neglogL, method="BFGS", hessian=TRUE, control=list(trace=1,REPORT=1))
+
+names(est) #check output
+
+cQ = matrix(0,4,4)
+cQ[!lower.tri(cQ)] = est$par[1:10]
+t(cQ)%*%cQ
+
+cR = matrix(0,2,2)
+cR[!lower.tri(cR)] = est$par[11:13]
+t(cR)%*%cR
+```
+
+#### compute the filtered values, predicted values and smoothed values and their variances.
+
+```{r, fig.height=5, fig.width=7}
+y.Kf = Kfilter0(n,y,A,mu0,Sigma0,Phi,cQ,cR)
+y.sm = Ksmooth0(n,y,A,mu0,Sigma0,Phi,cQ,cR) 
+
+par(mfcol=c(1,1))
+plot(y,xlab="x-loc", ylab="y-loc", pch=3, lwd=2, cex=0.8) 
+lines(x, col=2, pch=16) #true signal
+points(x[1,1],x[1,2],col=2, pch=16, cex=1.8) 
+lines(t(y.Kf$xf[,1,]),col=3, pch=16)  #filter value
+lines(t(y.sm$xs[,1,]),col=4, pch=16) #smoother
+legend("topleft",legend=c("true signal","filter","smoother","noisy obs'n"),col=c(2,3,4,1),pch=c(16,16,16,3), bty="n")
+
+
+#plot true speed vs estimated speed:
+ts.plot(t(y.sm$xs[3:4,1,]), col=1:2)
+abline(h=v, col=3)
+```
+
+
+
+
+
+
+

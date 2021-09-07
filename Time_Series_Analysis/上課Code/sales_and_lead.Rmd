@@ -1,0 +1,163 @@
+---
+title: "Demo: Transfer Function Modeling for Sales Data with a Leading Indicator"
+date: "2020/6/4"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### About Data
+
+* data can be read from `Sales.txt` and `Lead.txt`
+* Goal: build a transfer function model for predicting sales.
+
+### Preparation
+
+`dualplot` makes nice plot for two series on different scales together
+
+```{r warning=FALSE, message=FALSE}
+#set your working directory
+library(vars)
+library(forecast)
+
+source("dualplot.r")     
+lead = ts(scan("LEAD.txt"))
+sales = ts(scan("SALES.txt"))
+
+```
+
+### Time Series Plot 
+
+* Two series `sales` and `lead` are both nonstationary but move concordantly. 
+* `lead` seems to be a leading indicator of `sales`, which leads the movement.
+
+```{r warning=FALSE, message=FALSE}
+par(mfcol=c(1,1))
+#ts.plot(lead,main="Y_t1: Leading Indicator")
+#ts.plot(sales,main="Y_t2: Sales")
+
+dualplot(x1=1:length(sales), y1=sales, y2=lead, lwd=rep(2,2))
+```
+
+### Procedures for fitting transfer function model
+
+* differencing data to make input and output series stationary
+* prewhitening input series x
+* filter output series y to get ystar
+* inspect CCf of 2 differenced series to figure out the lag regression structure 
+  + select delay lag d
+  + simplify tranfer function via the equivalence of arma polynomial structure 
+* refit lag regression
+
+```{r warning=FALSE, message=FALSE}
+lead.d1 = diff(lead)
+sales.d1 = diff(sales)
+
+dualplot(x1=2:150, y1=sales.d1, y2=lead.d1, lwd=rep(2,2)) #differened series
+
+
+all.d1 = cbind(lead.d1,sales.d1)
+acf(all.d1)
+#acf(x.all[,1],type="partial")
+#acf(x.all[,2],type="partial")
+
+mu.est = apply(all.d1,2,mean)
+
+x = lead.d1 - mu.est[1]
+y = sales.d1 - mu.est[2]
+
+#prewhitening for x=diff(lead):
+par(mfcol=c(1,2))
+acf(x)
+acf(x,type="partial")
+
+
+fit1 = arima(x,order=c(0,0,1), include.mean = FALSE) #MA(1)
+fit1
+tsdiag(fit1)
+
+w = fit1$resid
+w.var = fit1$sigma2
+
+filter1 = c(1,ARMAtoMA(-fit1$coef, 0, 10)) #pi(B)=[theta(B)]^{-1}
+ystar = filter(y,filter1,sides=1) #filter output by pi(B)
+
+wy = cbind(w,ystar)
+acf(wy,na.action=na.pass) #checking CCF patterns for transfer function structure
+#select delay=3; w = B^3/(1-aB); based on the CCF(ystar,w)
+
+#refit: lag regression:
+n = length(y)
+y1 = y[4:n]
+reg1 = y[3:(n-1)] #lag-1 y
+reg2 = x[1:(n-3)] #lag-3 x
+
+xy = ts.intersect(sales.d1=y, sales.lag1=lag(y,-1), lead.lag3=lag(x,-3))#design matrix
+fit2 = lm(sales.d1 ~ -1+sales.lag1+lead.lag3, na.action=NULL, data=xy) #y is demeaned (intercept is not needed)
+summary(fit2)
+
+par(mfcol=c(2,2))
+plot(fit2, col=4, pch=16)
+
+par(mfcol=c(1,1))
+ts.plot(cbind(xy[,1],fit2$fitted),col=c(1,4), lwd=2)
+legend("topright", legend=c("diff(sales)","predicted diff(sales)"), lwd=2, bty="n", lty=1, col=c(1,4))
+plot(c(xy[,1]),c(fit2$fitted), col=4, pch=16, xlab = "diff(sales)", ylab="predicted diff(sales)")
+curve(I(x), from=min(xy[,1]), to=max(xy[,1]), lwd=2, add=T) #add the diagonal line
+```
+
+### Procedures for fitting transfer function model (cont.)
+
+* checking ACF of residuals (`fit2$resid`) for specifying model for noise term
+* refine lag regression model by incorporating ARMA model for noise term (`fit3` & `fit4`)
+
+* the final model `fit4` (compared to `fit2`) has 1-step PMSE = 0.0456 (prediction sd = 0.2135)
+
+```{r}
+ts.plot(fit2$resid)
+acf(fit2$resid) #MA(1) model seems appropriate for noise term
+
+auto.arima(fit2$resid) #select ARMA(1,2) for noise term
+
+fit3 = arima(xy[,1], order=c(1,0,2), xreg=xy[,2:3], include.mean = FALSE)
+fit3
+tsdiag(fit3)
+
+#refine model (remove insignificant effects)
+fit4 = arima(xy[,1], order=c(0,0,2), xreg=xy[,2:3], include.mean = FALSE)
+fit4
+tsdiag(fit4)
+
+# prediction performance for final model:
+par(mfcol=c(1,1))
+ts.plot(cbind(xy[,1],xy[,1]-fit4$resid),col=c(1,4), lwd=2)
+legend("topright", legend=c("diff(sales)","predicted diff(sales)"), lwd=2, bty="n", lty=1, col=c(1,4))
+plot(c(xy[,1]),c(xy[,1]-fit4$resid), col=4, pch=16, xlab = "diff(sales)", ylab="predicted diff(sales)")
+curve(I(x), from=min(xy[,1]), to=max(xy[,1]), lwd=2, add=T) #add the diagonal line
+
+mean(fit4$residuals^2) #1-step PMSE
+
+```
+
+### VAR model fitting for comparison
+
+* The AIC-selected VAR(8) model (`fit6`) for predicting y (diff(sales)) has 1-step PMSE 0.0494 (root PMSE = 0.2223); but several VAR coefficients are not significant!
+
+* The BIC-selected VAR(5) model (`fit7`) for predicting y (diff(sales)) has 1-step PMSE 0.0628 (root PMSE = 0.2506); but several VAR coefficients are not significant!
+
+* Both models have worse prediction performance than the transfer function model `fit4`
+
+```{r, fig.align='center', fig.height=8, fig.width=10}
+xy1 = cbind(x,y)
+fit5 = VARselect(xy1, 10, type="none")
+fit5
+
+fit6 = vars::VAR(xy1, p=8, type="none") 
+summary(fit6)
+
+fit7 = vars::VAR(xy1, p=5, type="none") 
+summary(fit7)
+
+```

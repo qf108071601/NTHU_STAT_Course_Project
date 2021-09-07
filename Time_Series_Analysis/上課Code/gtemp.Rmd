@@ -1,0 +1,186 @@
+---
+title: 'Demo: State-space modeling and Kalman filter'
+date: "2020/5/28"
+output: html_document
+---
+
+#### Global Temperature Deviations (source: SS TextBook, Example 6.2)
+
+Two yearly temperature anomaly series from different data source:
+
+* `globtemp`: the global mean land-ocean temperature index data
+
+* `globtempl`: the surface air temperature index data using only meteorological station data
+
+Conceptually, both series should be measuring the same underlying climatic signal. 
+
+Goal: to extract this underlying signal based on both series.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r warning=FALSE, message=FALSE}
+#load package
+library(astsa)
+```
+
+#### Time series plot
+
+```{r}
+#pdf(file="gtemp2_ts.pdf", width=7.6, height=3)
+par(mar=c(2,2.5,.5,.5)+.5, mgp=c(1.6,.6,0))
+ts.plot(globtemp, globtempl, ylab="Temperature Deviations", xlab="Time", main='', type='n')
+grid(lty=1, col=gray(.9))
+lines(globtemp,  lwd=2, col = 4)
+lines(globtempl, lwd=2, col = 3)
+legend('topleft', col=c(4,3), lty=1, lwd=2, 
+       legend=c("Land/Ocean", "Land Only"), bg='white', bty="n")  
+#dev.off()
+```
+
+#### State-space model (with a common signal) and likelihood:
+
+$$
+\left(\begin{array}{c} y_{1,t} \\ y_{2,t} \end{array}\right) 
+= \left(\begin{array}{c} 1 \\ 1 \end{array}\right) x_t +\left(\begin{array}{c} \epsilon_{1,t} \\ \epsilon_{2,t} \end{array}\right), ~{\epsilon}_t\sim N(0, R),~R=(cR)'(cR), $$
+$$ x_t = \delta + x_{t-1} + w_t, ~w_t\sim N(0,Q), ~Q=\sigma_w^2.$$
+
+```{r}
+y = cbind(globtemp,globtempl) 
+dim(y)
+
+num = nrow(y)
+input = rep(1,num)
+
+A = array(rep(1,2), dim=c(2,1,num))
+mu0 = -.3; Sigma0 = 1;  Phi = 1
+
+# Function to Calculate -logL
+neglogL = function(para){
+  cQ = para[1]     # sigma_w = chol(Q)
+  cR1 = para[2]    # 11 element of chol(R)
+  cR2 = para[3]    # 22 element of chol(R)
+  cR12 = para[4]   # 12 element of chol(R)
+  cR = matrix(c(cR1,0,cR12,cR2),2)  # upper triangular matrix
+  drift = para[5]  # delta
+  kf = Kfilter1(num,y,A,mu0,Sigma0,Phi=1,drift,0,cQ,cR,input)
+  return(kf$like) 
+}
+```
+
+#### Solve MLE via runing KF to compute -logL
+
+```{r}
+init.par = c(0.1, 0.1, 0.1, 0, 0.05)  # initial values of parameters
+
+est = optim(init.par, neglogL, method="BFGS", hessian=TRUE, control=list(trace=1,REPORT=1))
+
+names(est) #check output
+
+# final ML estimates
+cQ=est$par[1]
+cR1=est$par[2]
+cR2=est$par[3]
+cR12=est$par[4]
+cR = matrix(c(cR1,0,cR12,cR2), 2)
+drift = est$par[5]
+```
+
+#### MLE and Accuracy:
+
+$var(\epsilon_{1,t})=0.0055$ is mush smaller than $var(\epsilon_{2,t})=0.0328$, indicating the first series
+(with land-ocean info) is more accurate than the 2nd series (with land only info) to extract the signal.
+
+```{r}
+MLE.se = sqrt(diag(solve(est$hessian))) #hessian is the empirical Fisher info
+
+# display estimates
+u = cbind(estimate=est$par, MLE.se, z=est$par/MLE.se, pvalue=2*(1-pnorm(abs(est$par/MLE.se))) )
+rownames(u)=c("sigw","cR11", "cR22", "cR12", "drift")
+round(u,4)  
+
+#view var(w_t) = Q = t(cR)%*%cR 
+t(cR)%*%cR    
+```
+
+#### Kalman smoothing: $x_{t|n}$ and $P_{t|n}$
+
+```{r}
+# run kalman smoothing/filtering/prediction for MLE:
+ks = Ksmooth1(num,y,A,mu0,Sigma0,Phi=1,drift,0,cQ,cR,input)
+
+# Plot
+xsm = ts(as.vector(ks$xs), start=1880)
+xsm = window(xsm, start=1900)
+rmspe = ts(sqrt(as.vector(ks$Ps)), start=1880)
+rmspe = window(rmspe, start=1900)
+
+#pdf(file="gtemp_sm.pdf", width=7.6, height=4)
+par(mar=c(3,3,2,.5)+.5, mgp=c(1.6,.6,0))
+plot(xsm,  ylim=c(-.6,1), ylab="Temperature Deviations", type='n')
+grid(lty=1)
+xx=c(time(xsm), rev(time(xsm)))
+yy=c(xsm-1.96*rmspe, rev(xsm+1.96*rmspe))
+polygon(xx, yy, border=NA, col=rgb(.6,.6,.6,alpha=.2)) 
+lines(window(globtemp, start=1900), pch=16, col=4)   # color helps here
+lines(window(globtempl, start=1900), col=3)
+lines(xsm, lwd=2)
+lines(globtemp,  lwd=2, col = 4)
+lines(globtempl, lwd=2, col = 3)
+legend('topleft', col=c(4,3,1), lty=1, lwd=2, 
+       legend=c("Land/Ocean", "Land Only", "Smoothed value"), bg='white', bty="n")  
+title("Smoother with 95% Prediction Interval")
+#dev.off()
+```
+
+#### Kalman Filtering: $x_{t|t}$ and $P_{t|t}$
+
+```{r}
+#pdf(file="gtemp_filter.pdf", width=7.6, height=4)
+# Plot
+xsm = ts(as.vector(ks$xf), start=1880)
+xsm = window(xsm, start=1900)
+rmspe = ts(sqrt(as.vector(ks$Pf)), start=1880)
+rmspe=window(rmspe, start=1900)
+
+plot(xsm,  ylim=c(-.6,1), ylab="Temperature Deviations", type='n')
+grid(lty=1)
+xx=c(time(xsm), rev(time(xsm)))
+yy=c(xsm-1.96*rmspe, rev(xsm+1.96*rmspe))
+polygon(xx, yy, border=NA, col=rgb(.6,.6,.6,alpha=.2)) 
+lines(window(globtemp, start=1900), pch=16, col=4)   # color helps here
+lines(window(globtempl, start=1900), col=3)
+lines(xsm, lwd=2)
+lines(globtemp,  lwd=2, col = 4)
+lines(globtempl, lwd=2, col = 3)
+legend('topleft', col=c(4,3,1), lty=1, lwd=2, 
+       legend=c("Land/Ocean", "Land Only", "Filtered value"), bg='white', bty="n")  
+title("Filter with 95% Prediction Interval")
+#dev.off()
+```
+#### Kalman prediction: $x_{t|t-1}$ and $P_{t|t-1}$
+
+```{r}
+#pdf(file="gtemp_predictor.pdf", width=7.6, height=4)
+# Plot
+xsm = ts(as.vector(ks$xp), start=1880)
+xsm = window(xsm, start=1900)
+rmspe = ts(sqrt(as.vector(ks$Pp)), start=1880)
+rmspe = window(rmspe, start=1900)
+
+plot(xsm,  ylim=c(-.6,1), ylab="Temperature Deviations", type='n')
+grid(lty=1)
+xx=c(time(xsm), rev(time(xsm)))
+yy=c(xsm-1.96*rmspe, rev(xsm+1.96*rmspe))
+polygon(xx, yy, border=NA, col=rgb(.6,.6,.6,alpha=.2)) 
+lines(window(globtemp, start=1900), pch=16, col=4)   # color helps here
+lines(window(globtempl, start=1900), col=3)
+lines(xsm, lwd=2)
+lines(globtemp,  lwd=2, col = 4)
+lines(globtempl, lwd=2, col = 3)
+legend('topleft', col=c(4,3,1), lty=1, lwd=2, 
+       legend=c("Land/Ocean", "Land Only", "Predicted value"), bg='white', bty="n")  
+title("Predictor with 95% Prediction Interval")
+#dev.off()
+```

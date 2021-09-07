@@ -1,0 +1,236 @@
+---
+title: 'Demo: State-space modeling and Kalman filter'
+date: "2020/5/28"
+output: html_document
+---
+
+#### Economic Series (source: SS TextBook, Example 6.10)
+
+The data are quarterly earnings from the U.S. company Johnson & Johnson.
+
+* The series is highly nonstationary, with an increasing  trend signal. 
+
+* Clear seasonality with period 4 (four quarters per year), and the effects are getting larger over time as well. 
+
+* Transforming series into logarithms or even taking the nth root does not seem to make the series trend stationary, however, such a transformation may help with stabilizing the variance over time.
+
+Goal: to characterize the series patterns, and make forecasts (for a year).
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r warning=FALSE, message=FALSE}
+#load package
+library(astsa)
+library(forecast)
+library(latex2exp) #latex
+```
+
+#### Time series plot
+```{r}
+ts.plot(jj, col=4, lwd=2, main="Quarterly earnings of \n Johnson & Johnson Company") 
+
+acf(jj)
+```
+
+#### SARIMA Fitting
+
+* Box-Cox transformation to stablizing the variance
+
+```{r, fig.height=5, fig.width=7}
+#jj1 = jj  #no transform series
+
+lambda = BoxCox.lambda(jj)
+jj1 = BoxCox(jj,lambda) #jj1: transformed series 
+lambda
+
+ts.plot(jj1)
+acf(jj1)
+
+fit1 = arima(jj1, order=c(1,1,0), seasonal=list(order=c(0,1,0), period=4))
+fit1
+
+ts.plot(cbind(jj1,jj1-fit1$residuals), col=1:2, lwd=2)
+title("SARIMA fitting on transformed series")
+
+ts.plot(cbind(jj,InvBoxCox(jj1-fit1$residuals, lambda)), col=1:2, lwd=2)
+title("SARIMA fitting on original series")
+
+tsdiag(fit1)
+```
+
+#### Autofit 
+order selection by information criterion
+
+```{r, fig.height=5, fig.width=7}
+fit2 = auto.arima(jj1, d=1, D=1)
+summary(fit2)
+
+ts.plot(cbind(jj1,jj1-fit2$residuals), col=1:2, lwd=2)
+title("SARIMA auto-fitting on transformed series")
+
+ts.plot(cbind(jj,InvBoxCox(jj1-fit2$residuals, lambda)), col=1:2, lwd=2)
+title("SARIMA auto-fitting on original series")
+
+tsdiag(fit2, gof.lag=24)
+```
+
+
+#### Structural Modeling
+Decompose the observed series into trend component, seasonal component and error term. 
+
+* Model: $y_t = T_t + S_t + v_t, \quad var(v_t)=r^2$
+* $T_t=\phi T_{t-1} + w_{t,1}, \quad var(w_{t,1})=q_1^2$
+* $S_t + S_{t-1} + S_{t-2} + S_{t-3} = w_{t,2}, \quad var(w_{t,2})=q_2^2$
+* both trend and seasons are stochastic!
+* state-space model:
+\begin{eqnarray*}
+\mbox{measurement eq:} \quad y_t &=& (1,1,0,0) \left(\begin{array}{c} T_t \\ S_t \\ S_{t-1} \\ S_{t-2} \end{array}\right) +v_t,\\
+\mbox{state eq:} \quad 
+\left(\begin{array}{c} T_t \\ S_t \\ S_{t-1} \\ S_{t-2} \end{array}\right)
+&=& \left(\begin{array}{cccc} \phi & 0 & 0 & 0\\ 0 & -1 & -1 & -1 \\ 0 & 1 & 0 & 0 \\ 0 & 0 & 1 & 0 \end{array}\right) 
+\left(\begin{array}{c} T_{t-1} \\ S_{t-1} \\ S_{t-2} \\ S_{t-3} \end{array}\right)+
+\left(\begin{array}{cc} 1 & 0 \\ 0 & 1 \\ 0 & 0  \\ 0 & 0 \end{array}\right)
+\left(\begin{array}{c} w_{t,1} \\ w_{t,2} \end{array}\right).
+\end{eqnarray*}
+
+```{r, fig.height=5, fig.width=7}
+# Function to calculate -logL via Kalman filter
+jj.neglogL =function(para){
+    Phi = diag(0,4); Phi[1,1] = para[1]
+    Phi[2,]=c(0,-1,-1,-1); Phi[3,]=c(0,1,0,0); Phi[4,]=c(0,0,1,0)
+    cQ1 = para[2]; cQ2 = para[3] # parameter for sd(w_t): q1 and q2
+    cQ = diag(0,4); cQ[1,1]=cQ1; cQ[2,2]=cQ2
+    cR = para[4] # parameter for sd(v_t)
+
+    kf = Kfilter0(num, jj, A, mu0, Sigma0, Phi, cQ, cR)
+    return(kf$like) 
+}
+
+
+#setup matrix for state-space modeling:
+num = length(jj)
+A = cbind(1,1,0,0)
+
+# Initial Parameters
+mu0 = c(jj[1],0,0,0)
+Sigma0 = diag(.04,4)
+init.par = c(0.9, 0.1, 0.1, 0.5) # Phi[1,1], the 2 cQs and cR
+
+# Estimation and Results
+est = optim(init.par, jj.neglogL, method='L-BFGS-B', lower=c(-Inf, 0,0,0), hessian=TRUE,
+control=list(trace=1,REPORT=1))
+SE = sqrt(diag(solve(est$hessian)))
+u = cbind(estimate=est$par, SE)
+rownames(u)=c('Phi11','sigw1','sigw2','sigv')
+u
+```
+
+#### Smoothing and Decomposition
+
+* $\hat{\phi}=1.035 (se(\hat{\phi})=0.0025)$ showing growth rate is about 3% per year
+
+```{r, fig.height=8, fig.width=7}
+# Smoothing:
+Phi = diag(0,4); Phi[1,1] = est$par[1]
+Phi[2,]=c(0,-1,-1,-1); Phi[3,]=c(0,1,0,0); Phi[4,]=c(0,0,1,0)
+cQ1 = est$par[2]; cQ2 = est$par[3]
+cQ = diag(1,4); cQ[1,1]=cQ1; cQ[2,2]=cQ2
+cR = est$par[4]
+
+ks = Ksmooth0(num,jj,A,mu0,Sigma0,Phi,cQ,cR)
+
+# Plots
+Tsm = ts(ks$xs[1,,], start=1960, freq=4) #trend only
+Ssm = ts(ks$xs[2,,], start=1960, freq=4) #season only
+p1 = 2*sqrt(ks$Ps[1,1,]) 
+p2 = 2*sqrt(ks$Ps[2,2,])
+
+par(mfrow=c(3,1))
+plot(Tsm, main='Trend Component', ylab='Trend')
+xx = c(time(jj), rev(time(jj)))
+yy = c(Tsm-p1, rev(Tsm+p1))
+polygon(xx, yy, border=NA, col=gray(.5, alpha = .3))
+
+plot(Ssm, main='Seasonal Component', ylab='Season')
+yy = c(Ssm-p2, rev(Ssm+p2))
+polygon(xx, yy, border=NA, col=gray(.5, alpha = .3))
+
+plot(jj, main='Data & Trend+Season', ylab='J&J QE/Share', ylim=c(-.5,17))
+xx = c(time(jj), rev(time(jj)) )
+yy = c((Tsm+Ssm)-(p1+p2), rev((Tsm+Ssm)+(p1+p2)) )
+polygon(xx, yy, border=NA, col=gray(.5, alpha = .3))
+```
+
+#### Forecasts for 3 year in advance
+
+* Note: the R codes have an error in S&S textbook (to produce Fig. 6.8)
+
+```{r, fig.height=5, fig.width=7} 
+n.ahead = 12;
+y = ts(append(jj, rep(0,n.ahead)), start=1960, freq=4)
+
+rmspe = rep(0,n.ahead); 
+x00 = ks$xf[,,num]; 
+P00 = ks$Pf[,,num]
+Q = t(cQ)%*%cQ; 
+R = t(cR)%*%(cR)
+
+for (m in 1:n.ahead){
+  xp = Phi%*%x00; 
+  Pp = Phi%*%P00%*%t(Phi)+Q
+  sig = A%*%Pp%*%t(A)+R #var(yhat_{n+m|n})
+  x00 = xp; P00 = Pp    #no new info after t=num, and therefore no update
+  y[num+m] = A%*%xp; rmspe[m] = sqrt(sig) 
+}
+
+plot(y, main='', col=4, lwd=2, ylab='J&J QE/Share', ylim=c(0,30), xlim=c(1960,1985))
+
+upp = ts(y[(num+1):(num+n.ahead)]+2*rmspe, start=1981, freq=4)
+low = ts(y[(num+1):(num+n.ahead)]-2*rmspe, start=1981, freq=4)
+xx = c(time(low), rev(time(upp)))
+yy = c(low, rev(upp))
+polygon(xx, yy, border=8, col=gray(.5, alpha = .3))
+abline(v=1981, lty=2, col=3)
+```
+
+#### Compared to SARIMA fitting for series on the original scale
+
+```{r, fig.height=5, fig.width=7}
+fit3 = auto.arima(jj, d=1, D=1)
+summary(fit3)
+
+fit3.pred = predict(fit3, n.ahead=12)
+
+z = ts(append(jj, fit3.pred$pred), start=1960, freq=4)
+
+plot(z, main='', col=4, lwd=2, ylab='J&J QE/Share', ylim=c(0,30), xlim=c(1960,1985))
+
+upp = ts(z[(num+1):(num+n.ahead)]+2*fit3.pred$se, start=1981, freq=4)
+low = ts(y[(num+1):(num+n.ahead)]-2*fit3.pred$se, start=1981, freq=4)
+xx = c(time(low), rev(time(upp)))
+yy = c(low, rev(upp))
+polygon(xx, yy, border=8, col=gray(.5, alpha = .3))
+abline(v=1981, lty=2, col=3)
+```
+
+#### compare to fitting based on transformed series
+
+```{r, fig.height=5, fig.width=7}
+fit2.pred = predict(fit2, n.ahead=12)
+
+z2 = ts(append(jj, InvBoxCox(fit2.pred$pred, lambda)), start=1960, freq=4)
+
+plot(z2, main='', col=4, lwd=2, ylab='J&J QE/Share', ylim=c(0,30), xlim=c(1960,1985))
+
+upp = ts(InvBoxCox(fit2.pred$pred+2*fit2.pred$se, lambda), start=1981, freq=4)
+
+low = ts(InvBoxCox(fit2.pred$pred-2*fit2.pred$se, lambda), start=1981, freq=4)
+
+xx = c(time(low), rev(time(upp)))
+yy = c(low, rev(upp))
+polygon(xx, yy, border=8, col=gray(.5, alpha = .3))
+abline(v=1981, lty=2, col=3)
+```
